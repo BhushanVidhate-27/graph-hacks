@@ -298,6 +298,14 @@ We can all explain the schema, the queries, the architecture and the trade-offs.
 
 ---
 
+## Validation & Test Coverage
+
+- **Data-Driven Test Suite**: `tests/test_generated_1000.py` contains 1000+ auto-generated cases covering alias resolution, every graph tool, invariants, vocabularies, hostile inputs, unknown services, all 20 hand-written facts, and the `/ask` SSE + validation + CORS + failure-frame contract. It runs against the real FalkorDB graph (no API key required for the structural/API cases).
+- **Bug-catching discipline**: the suite caught a real bug (`on_call` reading the date from the wrong property) and, after a one-line fix, passes **1001/1001 (100.00%)** in ~27s. The existing suite (`tests/`) continues to pass.
+- **Deterministic ground truth**: Scored against hand-written facts in [`GROUND_TRUTH.md`](GROUND_TRUTH.md), not against an LLM. Direct graph verification via [`scripts/verify.py`](scripts/verify.py); end-to-end agent verification via [`scripts/verify_agent.py`](scripts/verify_agent.py).
+
+---
+
 ## Credits
 
 Built by **Bhushan**, **Soham** and **Ujwal**.
