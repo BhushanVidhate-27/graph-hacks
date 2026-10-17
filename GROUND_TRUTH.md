@@ -193,3 +193,31 @@ failed at Gate 2, when there was no time left to fix it.
 | 2 | Fact 5 listed 7 services incl. `ledger-core` | 8 services, upstream excluded | `ledger-core`/`settlement-batch` are upstream of payments |
 | 3 | Fact 7 → `settlement-batch` | → `notifications` | `settlement-batch` is not in the payments blast radius |
 | 4 | "18 services" | **20 services** | `ledger-core` had no row in the table despite 7 dependents |
+
+---
+
+## Addendum 2026-10-17 — on-call resolved
+
+`bhushan.md` §5 contradicted itself: the People table said *"Ravi Menon — on-call
+Ledger"*, fact 11 said the answer was **Diego Alvarez**. Both cannot be the single
+on-call person.
+
+**Resolved:** rotation membership and on-call are separate facts.
+
+| Person | On the Ledger rotation? | On call this week? |
+|---|---|---|
+| Ravi Menon | yes | **no** |
+| Diego Alvarez | yes | **yes** |
+| Priya Sharma | **no** — left 2026-04-15 | no |
+
+**Fact 11 answer is unchanged: Diego Alvarez.** What changed is the model —
+`HAS_ROTATION` (standing) is now distinct from `ON_CALL` (dated). See
+[`SCHEMA.md`](SCHEMA.md) §2.
+
+Ravi being on the rotation but *not* on call this week is what makes fact 11 a real
+answer rather than a lookup: the graph has to reject two of its three candidates.
+
+**Fact 10 note:** this also strengthens fact 10. Ana Duarte is on neither payments nor
+ledger's rotation — she is the only person who worked both, with no on-call
+justification. That is exactly the kind of hidden bus-factor the product exists to
+surface.

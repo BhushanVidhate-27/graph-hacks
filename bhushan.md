@@ -114,7 +114,7 @@ You need something in `agent.py` that isn't there? Ping Soham. You need a fronte
 
 | # | Task | Done when |
 |---|---|---|
-| **B4** | `scripts/load.py` — indexes first, then batched `UNWIND` | 18 services, ~100 people, ~2,000 messages visible in Browser |
+| **B4** | `scripts/load.py` — indexes first, then batched `UNWIND` | 20 services, ~100 people, ~2,000 messages visible in Browser |
 | **B5** | `app/graph.py` — the 3 traversals, **written against the loaded graph** | Each returns real rows |
 | **B6** | Ground-truth verification — all 20 questions | Every answer matches the file |
 | **B7** | Break-it pass — the 5 questions it should fail | Correct failures, zero fabrication |
@@ -160,7 +160,11 @@ RETURN d.id, d.summary, who.name AS author, ev.date, prev.summary AS superseded
 <details>
 <summary><b>5. The 20 ground-truth facts</b></summary>
 
-Put these in `GROUND_TRUTH.md`. Company: **Helio** — 120-person fintech, 5 teams, 18 services, migrating payment providers.
+Put these in `GROUND_TRUTH.md`. Company: **Helio** — 120-person fintech, 5 teams, 20 services, migrating payment providers.
+
+> ⚠️ **Revised 2026-10-17.** Facts 5, 6, 7 and the DAG below were wrong and have been
+> corrected. See the change log at the foot of this section. `GROUND_TRUTH.md` is the
+> authoritative version — this section is a summary of it.
 
 ### Ownership
 
@@ -175,9 +179,9 @@ Put these in `GROUND_TRUTH.md`. Company: **Helio** — 120-person fintech, 5 tea
 
 | # | Question | Correct answer |
 |---|---|---|
-| 5 | What breaks if `payments-gateway` dies? | `checkout-api`, `mobile-bff`, `webhook-relay`, `ledger-core`, `settlement-batch`, `dispute-service`, `notifications` |
-| 6 | Which of those are owned by a different team? | `ledger-core`, `settlement-batch`, `dispute-service`, `notifications`, `webhook-relay`, `mobile-bff` |
-| 7 | Which dependent has no contributor in 90 days? | **`settlement-batch`** — bus-factor risk |
+| 5 | What breaks if `payments-gateway` dies? | **8 services** — depth 1: `checkout-api`, `config-service`, `dispute-service`, `mobile-bff`, `notifications`, `webhook-relay` · depth 2: `fraud-scoring` · depth 3: `recommendation` |
+| 6 | Which of those are owned by a different team? | Payments — `checkout-api`, `mobile-bff`, `dispute-service` · Growth — `notifications`, `recommendation` · Risk — `fraud-scoring`. Plus `config-service`, which has **no team at all** |
+| 7 | Which dependent has no contributor in 90 days? | **`notifications`** — owned by Growth, one hop from payments, untouched since 2026-05-02. Bus-factor risk |
 
 ### Who knows what
 
@@ -209,8 +213,11 @@ Put these in `GROUND_TRUTH.md`. Company: **Helio** — 120-person fintech, 5 tea
 
 ### Service inventory — dependency DAG
 
+20 services · 22 `DEPENDS_ON` edges · **verified acyclic**.
+
 | Service | Depends on |
 |---|---|
+| `ledger-core` | — |
 | `payments-gateway` | `ledger-core` |
 | `checkout-api` | `payments-gateway` |
 | `mobile-bff` | `payments-gateway` |
@@ -222,12 +229,30 @@ Put these in `GROUND_TRUTH.md`. Company: **Helio** — 120-person fintech, 5 tea
 | `reporting-etl` | `ledger-core`, `billing-invoicing` |
 | `search-index` | `reporting-etl` |
 | `fraud-scoring` | `checkout-api` |
-| `auth-service` | all public services |
+| `auth-service` | — |
 | `session-store` | `auth-service` |
-| `api-gateway` | all public services |
+| `api-gateway` | — |
 | `config-service` | `payments-gateway`, `auth-service` |
 | `user-profile` | `auth-service` |
 | `recommendation` | `fraud-scoring`, `user-profile` |
+| `web-frontend` | `api-gateway` |
+| `admin-bff` | `api-gateway` |
+
+> ⚠️ **`auth-service` and `api-gateway` depend on nothing, on purpose.** An earlier draft
+> had both fanning out to "all public services". That made the graph **cyclic**
+> (`api-gateway → web-frontend → api-gateway`, `api-gateway → admin-bff → api-gateway`)
+> and dragged the whole frontend/edge tier into payments' blast radius, inflating fact 5
+> to 14 services of which most were noise. The public tier is the *edge* — it is downstream
+> of nothing. Removing the fan-in is what makes fact 5 a sharp answer.
+
+### Change log — 2026-10-17, before any data was generated
+
+| # | Was | Now | Why |
+|---|---|---|---|
+| 1 | `auth-service`, `api-gateway` → all public services | → nothing | 2 cycles + blast radius inflated to 14 |
+| 2 | Fact 5 listed 7 services incl. `ledger-core`, `settlement-batch` | 8 services, upstream excluded | those two are **upstream** of payments — payments breaks if *they* die |
+| 3 | Fact 7 → `settlement-batch` | → `notifications` | `settlement-batch` is not in the payments blast radius, so the question was unanswerable |
+| 4 | "18 services" | **20 services** | `ledger-core` had no row despite 7 services depending on it |
 
 ### People
 
@@ -447,7 +472,7 @@ service, departed employee). Those contradictions are the freshness demo and the
 the agent is not just echoing text.
 
 TASK: scripts/generate.py -- a seeded faker generator writing CSVs for a fictional
-120-person fintech "Helio": 100 people, 5 teams, 18 services with a real acyclic DAG,
+120-person fintech "Helio": 100 people, 5 teams, 20 services with a real acyclic DAG,
 ~200 documents, ~2000 chat messages that mention real services and people BY NAME,
 ~40 decisions with evidence links and at least one supersedes chain.
 
