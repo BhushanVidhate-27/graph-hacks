@@ -93,14 +93,51 @@ def test_call_tool_unknown_name_raises_with_the_published_list(monkeypatch):
 
 def test_staleness_rows_pass_through_in_the_frozen_shape():
     rows = [
+        {"type": "Document", "name": "payments-provider-eval-v3.md",
+         "last_verified_at": "2026-03-18", "reason": "last verified 2026-03-18"},
+    ]
+    out = agent.extract_stale("staleness", rows)
+    assert len(out) == 1
+    assert set(out[0]) == {"type", "name", "reason", "last_verified_at"}
+    assert out[0]["name"] == "payments-provider-eval-v3.md"
+
+
+def test_staleness_drops_edge_rows_that_are_outside_the_frozen_vocabulary():
+    """Real-mode regression, from the live graph.
+
+    staleness() returns 163 rows: 162 Document plus exactly one edge-level row
+    {"type": "edge", "name": "CONTRIBUTED_TO"}.  mock/trail.json freezes
+    stale[].type to {Person, Decision, Document, Message, Service, Project, Team},
+    so "edge" is an undefined badge type -- the renderer styles by this value and
+    has no rule for it.  graph.py's _trail() keeps edge rows out of the trail too,
+    so such a row cannot badge a chip anyway.  The mock path never calls
+    staleness(), which is why this only ever showed up against real data.
+    """
+    rows = [
         {"type": "edge", "name": "CONTRIBUTED_TO",
          "last_verified_at": "2026-04-15", "reason": "not re-verified since 2026-04-15"},
         {"type": "Document", "name": "payments-provider-eval-v3.md",
          "last_verified_at": "2026-03-18", "reason": "last verified 2026-03-18"},
     ]
     out = agent.extract_stale("staleness", rows)
-    assert len(out) == 2
-    assert set(out[0]) == {"type", "name", "reason", "last_verified_at"}
+    assert [s["name"] for s in out] == ["payments-provider-eval-v3.md"]
+
+
+def test_every_emitted_stale_type_is_in_the_frozen_vocabulary():
+    """No tool may put an unusable badge type on the wire."""
+    stale = []
+    stale += agent.extract_stale("staleness", [
+        {"type": "edge", "name": "CONTRIBUTED_TO", "reason": "r", "last_verified_at": "d"},
+        {"type": "Document", "name": "doc.md", "reason": "r", "last_verified_at": "d"},
+    ])
+    stale += agent.extract_stale("expertise", [
+        {"person": "Priya Sharma", "latest": "2026-04-15", "stale": True, "detail": "d"},
+    ])
+    stale += agent.extract_stale("provenance", [
+        {"id": "D-14", "status": "superseded", "date": "2026-03-18", "detail": "d"},
+    ])
+    assert stale, "the test must actually produce some stale items"
+    assert {s["type"] for s in stale} <= agent.STALE_TYPES
 
 
 def test_expertise_only_marks_the_stale_person():

@@ -416,6 +416,17 @@ def run_agent(question: str) -> dict[str, Any]:
     }
 
 
+# The frozen stale[].type vocabulary.  mock/trail.json says stale[].type uses the
+# "same vocabulary as trail[].type", and lists exactly these seven.  A stale badge
+# is STYLED by this value, so a type outside the list is not a new kind of badge --
+# it is an undefined one, and the renderer has no rule for it.  The wire contract
+# is frozen after Day 1 15:00, so this code conforms to the list rather than
+# extending it.
+STALE_TYPES = frozenset(
+    {"Person", "Decision", "Document", "Message", "Service", "Project", "Team"}
+)
+
+
 def extract_stale(tool_name: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Lift stale facts out of a tool's ROWS into the frozen stale[] shape.
 
@@ -439,6 +450,15 @@ def extract_stale(tool_name: str, rows: list[dict[str, Any]]) -> list[dict[str, 
                 "last_verified_at": row.get("last_verified_at", ""),
             }
             for row in rows
+            # app/graph.py's staleness() also returns edge-level rows.  Measured on
+            # the live graph: 163 rows = 162 Document + 1 edge, where the edge row
+            # is {"type": "edge", "name": "CONTRIBUTED_TO"}.  "edge" is NOT in the
+            # frozen vocabulary above, and graph.py's own _trail() already keeps
+            # edge rows OUT of the trail -- so this row can never badge a chip, and
+            # must not reach the wire as an undefined badge type.  The row is still
+            # handed to the model inside `rows`, so nothing is hidden from the
+            # answer; only the unstyled badge is suppressed.
+            if row.get("type") in STALE_TYPES
         ]
 
     if tool_name == "expertise":
