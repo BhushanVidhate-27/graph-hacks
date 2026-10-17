@@ -109,6 +109,15 @@
   .standalonestale .r{color:var(--ink-2);font-size:12px}
   .err{background:#3a1a1a;border:1px solid #f85149;border-radius:var(--radius);padding:12px 14px;color:#ffb3ad;font-size:13px}
 
+  /* Contract drift. Hidden entirely when the incoming trail matches the frozen
+     shape, so a healthy demo is pixel-identical to before. */
+  #contractwarn{
+    display:block;background:var(--warn-bg);border:1px solid var(--warn);
+    border-radius:var(--radius);padding:8px 12px;margin:0 0 14px;
+    color:var(--warn);font-size:12px;
+  }
+  #contractwarn[hidden]{display:none}
+
   .errbar{
     background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);
     padding:8px 12px;margin-bottom:20px;font-size:12px;color:var(--ink-3);
@@ -145,6 +154,8 @@
   <div class="answer" id="answer">
     <span class="placeholder">Ask a multi-hop question. The answer will show its path.</span>
   </div>
+
+  <div id="contractwarn" hidden></div>
 
   <div class="trailwrap" id="trailwrap" hidden>
     <h2>Provenance trail</h2>
@@ -188,8 +199,10 @@ async function* askStream(question) {
     const fixture = await loadFixture();
     const match = pickCase(fixture, question);
     for (const chunk of match.answer) { await sleep(14); yield { part: "answer", text: chunk }; }
-    for (const row of match.trail) { await sleep(60); yield { part: "trail", row }; }
-    for (const row of match.stale) yield { part: "stale", row };
+    /* One row at a time so chips reveal left-to-right in the demo. `replace:false`
+       because this is a DELTA — the next row is additive, not a new snapshot. */
+    for (const row of match.trail) { await sleep(60); yield { part: "trail", rows: [row], replace: false }; }
+    for (const row of match.stale) yield { part: "stale", rows: [row], replace: false };
     yield { part: "done", answer: match.answer.join(""), trail: match.trail, stale: match.stale };
     return;
   }
@@ -208,6 +221,7 @@ async function* askStream(question) {
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "", seenTrail = false, seenStale = false, text = "";
+  let lastTrailSig = null, lastStaleSig = null;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -235,13 +249,22 @@ async function* askStream(question) {
       else if (msg.answer !== text) text += msg.answer;                 // delta
       yield { part: "answer", text: msg.answer, mode: text === msg.answer ? "replace" : "append" };
     }
+    /* trail[] and stale[] are SNAPSHOTS, not deltas. The server repeats the
+       full array in every frame, so appending per frame duplicates every chip
+       and every badge (verified against the real endpoint: 6 rows x 2 frames
+       rendered 12 chips). Always REPLACE with the latest snapshot, and only
+       when it actually changed, so we re-render once rather than per frame. */
     if (Array.isArray(msg.trail)) {
-      for (const row of msg.trail) { if (!seenTrail) { seenTrail = true; yield { part: "trail", row }; } else yield { part: "trail", row }; }
+      const sig = JSON.stringify(msg.trail);
+      if (sig !== lastTrailSig) { lastTrailSig = sig; seenTrail = true; yield { part: "trail", rows: msg.trail, replace: true }; }
     }
-    if (Array.isArray(msg.stale)) for (const row of msg.stale) { seenStale = true; yield { part: "stale", row }; }
+    if (Array.isArray(msg.stale)) {
+      const sig = JSON.stringify(msg.stale);
+      if (sig !== lastStaleSig) { lastStaleSig = sig; seenStale = true; yield { part: "stale", rows: msg.stale, replace: true }; }
+    }
   }
-  if (!seenTrail) yield { part: "trail", row: null };  // render the empty state
-  yield { part: "done", answer: text, trail: [], stale: seenStale ? [] : [] };
+  if (!seenTrail) yield { part: "trail", rows: [] };  // render the empty state
+  yield { part: "done", answer: text };
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -281,8 +304,57 @@ function pickCase(fixture, question) {
    Without the edge labels this is a list of things that happened to be near
    each other. With them it is a proof chain — which is the thesis of the entry.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+/* SCHEMA.md: via_edge is a CLOSED vocabulary, and the note on it is blunt —
+   "an unexpected value renders wrong with nobody noticing until Gate 2".
+   That is the same class of failure as the duplicated-trail bug, so the trail
+   is checked against the contract on every render instead of being trusted.
+
+   Deliberately invisible when the data is healthy: this must never put a
+   warning on screen during the demo. It only becomes visible when the incoming
+   rows actually violate the contract. */
+const VIA_EDGE_VOCABULARY = new Set([
+  "CONTRIBUTED_TO", "OWNED_BY", "EVIDENCED_BY", "SUPERSEDES", "MENTIONS",
+  "HAS_DEPENDENT", "DEPENDS_ON", "MEMBER_OF", "ON_CALL", "USES",
+  "HAS_ROTATION", "REPORTS_TO", "ABOUT", "AUTHORED_BY",
+]);
+const TRAIL_REQUIRED = ["type", "name", "detail", "date", "via_edge"];
+const STALE_REQUIRED = ["type", "name", "reason", "last_verified_at"];
+let contractIssues = [];
+
+function checkTrailContract(rows, stale) {
+  const issues = [];
+  (rows || []).forEach((r, i) => {
+    TRAIL_REQUIRED.forEach((k) => {
+      if (!(k in r)) issues.push(`trail[${i}] (${r.name || "?"}) missing "${k}"`);
+    });
+    // index 0 is the chain start, so its via_edge legitimately carries nothing
+    if (i > 0 && r.via_edge && !VIA_EDGE_VOCABULARY.has(r.via_edge)) {
+      issues.push(`trail[${i}] (${r.name || "?"}) unknown via_edge "${r.via_edge}"`);
+    }
+  });
+  (stale || []).forEach((s, i) => {
+    STALE_REQUIRED.forEach((k) => {
+      if (!(k in s)) issues.push(`stale[${i}] (${s.name || "?"}) missing "${k}"`);
+    });
+  });
+  contractIssues = issues;
+  if (issues.length) {
+    console.warn("[contract] trail does not match the frozen shape:", issues);
+  }
+  return issues;
+}
+
 function renderTrail(rows) {
   const host = $("#trail"); host.textContent = "";
+  const issues = checkTrailContract(rows, [...STALE.values()]);
+  const marker = $("#contractwarn"); marker.textContent = "";
+  if (issues.length) {
+    marker.hidden = false;
+    marker.textContent = `⚠ Contract drift: ${issues.length} field(s) off-shape — see console.`;
+  } else {
+    marker.hidden = true;
+  }
   if (!rows || rows.length === 0) { renderEmptyState(); return; }
   $("#trailwrap").hidden = false;
   host.style.display = "flex";
@@ -394,6 +466,8 @@ function setAnswer(text, streaming) {
 async function run(question) {
   const btn = $("#go"); btn.disabled = true;
   STALE.clear();
+  contractIssues = [];
+  $("#contractwarn").hidden = true;
   $("#trailwrap").hidden = true;
   $("#trail").textContent = "";
   $("#standalonestale").textContent = "";
@@ -405,10 +479,14 @@ async function run(question) {
       if (ev.part === "answer") {
         setAnswer(ev.mode === "replace" ? ev.text : currentText + ev.text, true);
       } else if (ev.part === "trail") {
-        if (ev.row) seen.push(ev.row);
+        /* replace=true  -> real mode, the array is a full snapshot; swap it.
+           replace=false -> mock mode, each event is one additive row. */
+        if (ev.replace) seen.length = 0;
+        seen.push(...(ev.rows || []));
         renderTrail(seen);
       } else if (ev.part === "stale") {
-        STALE.set(`${ev.row.type}|${ev.row.name}`, ev.row);
+        if (ev.replace) STALE.clear();
+        for (const row of (ev.rows || [])) STALE.set(`${row.type}|${row.name}`, row);
         renderTrail(seen);
       } else if (ev.part === "done") {
         setAnswer(ev.answer || currentText, false);

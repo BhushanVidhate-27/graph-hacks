@@ -18,11 +18,17 @@ Design rule for this file (soham.md §4, "S2"): EVERY mock lives behind ONE
 function with ONE clearly marked fake branch.  When the real graph lands we
 delete the fake branch and change nothing else.  Scattering mock literals
 through the handlers is how you end up grepping at 22:00.
+
+A FAILURE is not an exemption from the contract.  The status is committed to 200
+before the stream body runs, so an exception would reach the browser as a closed
+connection with no [DONE] -- a stuck spinner with no message.  Every failure is
+therefore streamed as a normal {answer, trail, stale} frame followed by [DONE].
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Iterator
@@ -34,6 +40,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 load_dotenv()
+
+logger = logging.getLogger("helio.api")
 
 # --------------------------------------------------------------------------- #
 # The one switch that flips mocks -> real graph
@@ -236,6 +244,34 @@ def _sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, default=str)}\n\n"
 
 
+def _failure_frame(exc: Exception) -> dict[str, Any]:
+    """Turn a server-side failure into a payload the frozen contract allows.
+
+    The crucial detail: by the time the generator runs, Starlette has already
+    sent the response headers, so the status is committed to 200 and the
+    exception can no longer become a 500.  Letting it escape therefore gives the
+    browser a *closed connection with no [DONE] and no message* -- the stuck
+    spinner, which reads as a frontend bug and cannot be debugged from the
+    client.  So a failure is sent as an ordinary frame, in the same
+    {answer, trail, stale} shape, followed by [DONE].
+
+    The message names the failure instead of inventing an answer -- the same
+    honesty rule the agent loop applies to an empty tool result.
+    """
+    if isinstance(exc, RuntimeError) and "ANTHROPIC_API_KEY" in str(exc):
+        reason = "the server has no ANTHROPIC_API_KEY configured"
+    else:
+        reason = f"the lookup failed ({type(exc).__name__})"
+    return {
+        "answer": (
+            f"I could not answer that: {reason}. "
+            "Nothing above is a claim about the graph."
+        ),
+        "trail": [],
+        "stale": [],
+    }
+
+
 def stream_answer(question: str) -> Iterator[str]:
     """Yield the trail first, then the answer.
 
@@ -243,7 +279,15 @@ def stream_answer(question: str) -> Iterator[str]:
     first frame lands, so the UI shows its evidence before the prose arrives.
     Every frame keeps all three canonical keys.
     """
-    result = answer_question(question)
+    try:
+        result = answer_question(question)
+    except Exception as exc:  # noqa: BLE001 - the failure must reach the client
+        # Log the whole traceback for whoever is on the deploy, and send a
+        # well-formed frame so the UI can say something instead of hanging.
+        logger.exception("answer_question failed for question=%r", question)
+        yield _sse(_failure_frame(exc))
+        yield "data: [DONE]\n\n"
+        return
 
     # Frame 1 — the evidence.  Answer is empty on purpose: nothing is claimed yet.
     yield _sse({"answer": "", "trail": result["trail"], "stale": result["stale"]})
@@ -266,7 +310,10 @@ app = FastAPI(title="Helio company brain", version="0.1.0")
 # Browser, not the Node dev server — allowing it would be a copy-paste bug.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    # localhost and the literal 127.0.0.1 are DIFFERENT origins to a browser, and
+    # Vite prints whichever the user opened, so both are allowed or the stream is
+    # blocked by CORS in a way that reads as a server bug.
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
