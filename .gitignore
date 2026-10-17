@@ -17,32 +17,8 @@ env/
 .ruff_cache/
 .mypy_cache/
 
-# OS noise (.DS_Store is already in the repo history; this stops new ones)
+# OS noise. .DS_Store was tracked, which meant every teammate whose Finder (or
+# archive tool) touched the folder re-dirtied the working tree. It is untracked
+# and ignored from here. A merge has already re-added it once, so it stays listed.
 .DS_Store
 Thumbs.db
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-
-# Virtual environments
-.venv/
-venv/
-env/
-
-# Secrets — never commit these (the deploy uses them)
-.env
-.env.*
-
-# Tooling
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-
-# OS noise (.DS_Store is already in the repo history; this stops new ones)
-.DS_Store
-Thumbs.db
-
-# macOS Finder noise. It was tracked, which meant every teammate who opened
-# the folder re-dirtied the working tree. Untracked and ignored from here.
-.DS_Store
