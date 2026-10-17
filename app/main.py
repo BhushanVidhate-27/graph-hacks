@@ -266,7 +266,10 @@ app = FastAPI(title="Helio company brain", version="0.1.0")
 # Browser, not the Node dev server — allowing it would be a copy-paste bug.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    # localhost and the literal 127.0.0.1 are DIFFERENT origins to a browser, and
+    # Vite prints whichever the user opened, so both are allowed or the stream is
+    # blocked by CORS in a way that reads as a server bug.
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
