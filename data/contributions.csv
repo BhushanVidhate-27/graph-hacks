@@ -1,0 +1,13 @@
+person,project,role,commits,last_touch,last_verified_at
+Priya Sharma,payments-migration,tech lead,14,2026-04-15,2026-04-15
+Ravi Menon,payments-migration,owner,6,2026-09-28,2026-09-28
+Ana Duarte,payments-migration,ledger liaison,3,2026-08-14,2026-08-14
+Ravi Menon,checkout-latency,reviewer,4,2026-09-30,2026-09-30
+Tomas Berg,checkout-latency,implementer,9,2026-10-02,2026-10-02
+Tomas Berg,payments-migration,implementer,5,2026-07-30,2026-07-30
+Diego Alvarez,fraud-model-v3,tech lead,11,2026-10-01,2026-10-01
+Ana Duarte,ledger-reconciliation,tech lead,8,2026-09-19,2026-09-19
+Tomas Berg,dispute-evidence,implementer,4,2026-09-16,2026-09-16
+Ravi Menon,webhook-reliability,implementer,3,2026-09-10,2026-09-10
+Diego Alvarez,recommendation-tuning,implementer,5,2026-08-29,2026-08-29
+Mei Lin,auth-hardening,implementer,7,2026-09-25,2026-09-25

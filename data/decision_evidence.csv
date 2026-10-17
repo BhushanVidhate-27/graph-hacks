@@ -1,0 +1,11 @@
+decision,evidence_type,evidence_ref
+D-14,document,payments-provider-eval-v3.md
+D-14,message,#inc-payments:2026-03-18
+D-19,document,payments-provider-eval-v4.md
+D-19,message,#inc-payments:2026-05-06
+D-21,document,payments-ownership-handoff.md
+D-07,document,ledger-eventsourcing-rfc.md
+D-09,document,settlement-cadence-adr.md
+D-11,document,settlement-retirement.md
+D-03,document,edge-routing-design.md
+D-26,document,fraud-recompute-cap.md
