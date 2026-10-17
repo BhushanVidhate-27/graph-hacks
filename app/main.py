@@ -48,8 +48,14 @@ USE_MOCK = os.getenv("USE_MOCK", "1") == "1"
 
 # mock/ belongs to Ujwal.  We READ it, we never EDIT it (soham.md §4).  It is
 # the executable spec: if this file and the contract disagree, this file wins at
-# runtime and the bug lands on Ujwal's Saturday, so we read the contract shape.
-MOCK_PATH = Path(__file__).resolve().parent.parent / "mock" / "trail.json"
+# runtime and the bug lands on Ujwal's Saturday, so we follow the fixture's shape.
+# MOCK_TRAIL_PATH lets a test point at a copy without touching the real fixture.
+MOCK_PATH = Path(
+    os.getenv(
+        "MOCK_TRAIL_PATH",
+        str(Path(__file__).resolve().parent.parent / "mock" / "trail.json"),
+    )
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -104,13 +110,13 @@ class Answer(BaseModel):
 
 
 def _read_mock(question: str) -> dict[str, Any]:
-    """Load Ujwal's fixture and pick the answer for `question`.
+    """Load Ujwal's fixture and build the frozen payload for `question`.
 
-    The fixture is the frozen contract object.  We accept the two shapes it can
-    reasonably take so a small change on Ujwal's side does not break the mock:
-
-      1. an object keyed by question:  {"questions": {q: {...}}, "default": {...}}
-      2. a single contract object:     {"answer": ..., "trail": [...], "stale": [...]}
+    Ujwal's fixture is the executable spec (soham.md §3), so we follow ITS shape
+    rather than the one this file first guessed.  Cases live under "cases", and
+    each case carries its own `question` to match on.  `answer` is an array of
+    short strings so the frontend can test a token streamer; the fixture's own
+    shape_notes say the backend joins it, so we join.
 
     Anything unexpected raises with the path in the message, because a silent
     fallback here would look like an empty graph and that is a different bug.
@@ -123,17 +129,57 @@ def _read_mock(question: str) -> dict[str, Any]:
         )
 
     data = json.loads(MOCK_PATH.read_text(encoding="utf-8"))
+    return _to_payload(_select_case(data, question))
 
-    if isinstance(data, dict) and "questions" in data:
-        chosen = data["questions"].get(question) or data.get("default")
-        if chosen is None:
-            raise KeyError(
-                f"mock/trail.json has no entry for this question and no 'default': "
-                f"{question!r}"
-            )
-        return chosen
 
-    return data
+def _select_case(data: Any, question: str) -> dict[str, Any]:
+    """Pick the fixture case for `question` (by question text, then by case id).
+
+    We code to the fixture's actual shape.  If that shape changes we fail loudly
+    instead of silently guessing a new one — a silent mismatch here would surface
+    as an empty graph, which is a different bug with a different owner.
+    """
+    cases = data.get("cases") if isinstance(data, dict) else None
+    if not isinstance(cases, dict):
+        raise KeyError(
+            f"{MOCK_PATH} has no 'cases' object. Ujwal's fixture changed shape — "
+            "check with him rather than guessing the new one here."
+        )
+
+    for case in cases.values():  # match on the question text the case carries
+        if isinstance(case, dict) and case.get("question") == question:
+            return case
+    if isinstance(cases.get(question), dict):  # ... or on a case id like "demo"
+        return cases[question]
+
+    # No case for this question. Say so plainly rather than borrowing another
+    # case's answer — a confident off-topic answer is the bug we are avoiding.
+    return {
+        "answer": (
+            "This is the mock API and mock/trail.json has no case for that "
+            "question. Add one there (Ujwal owns the fixture) or ask one of the "
+            "demo questions."
+        ),
+        "trail": [],
+        "stale": [],
+    }
+
+
+def _to_payload(case: dict[str, Any]) -> dict[str, Any]:
+    """Reshape one fixture case into the frozen payload.
+
+    One real difference from the wire contract: the fixture stores `answer` as an
+    array of short strings, and the contract says a string. The fixture's own
+    shape_notes say the backend joins it, so we join.
+    """
+    answer = case.get("answer", "")
+    if isinstance(answer, list):
+        answer = "".join(str(part) for part in answer)
+    return {
+        "answer": answer,
+        "trail": case.get("trail") or [],
+        "stale": case.get("stale") or [],
+    }
 
 
 def answer_question(question: str) -> dict[str, Any]:
