@@ -36,6 +36,8 @@ load_dotenv()
 GRAPH = os.getenv("FALKORDB_GRAPH", "helio")
 HOST = os.getenv("FALKORDB_HOST", "localhost")
 PORT = int(os.getenv("FALKORDB_PORT", "6379"))
+USERNAME = os.getenv("FALKORDB_USERNAME", "")
+PASSWORD = os.getenv("FALKORDB_PASSWORD", "")
 
 # GROUND_TRUTH fact 8. Recency must reorder Priya below Ravi, so expertise()
 # returns volume and recency separately and never a single fused ranking.
@@ -43,7 +45,28 @@ STALE_DAYS = 90
 
 
 def _graph():
-    return FalkorDB(host=HOST, port=PORT).select_graph(GRAPH)
+    """Connect to FalkorDB — local Docker or Cloud.
+
+    Cloud needs three things local does not, and missing any one of them fails
+    with a bare connection error rather than anything that names the cause:
+
+      1. TLS (ssl=True). Plain TCP to a Cloud endpoint is refused.
+      2. A non-default port (Cloud is not 6379).
+      3. Credentials. Cloud requires a username/password pair even on Free.
+
+    All three are read from env, so the same code runs locally and in production
+    with no edit. Set FALKORDB_SSL=true for Cloud; it defaults off so the local
+    Docker container keeps working untouched.
+    """
+    kwargs = {"host": HOST, "port": PORT}
+    ssl_on = os.getenv("FALKORDB_SSL", "").strip().lower() in ("1", "true", "yes", "on")
+    if ssl_on:
+        kwargs["ssl"] = True
+    if USERNAME:
+        kwargs["username"] = USERNAME
+    if PASSWORD:
+        kwargs["password"] = PASSWORD
+    return FalkorDB(**kwargs).select_graph(GRAPH)
 
 
 def _trail(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
