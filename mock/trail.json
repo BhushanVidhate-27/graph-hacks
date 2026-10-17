@@ -1,0 +1,279 @@
+{
+  "_comment": "Ujwal's fixture. ONE shared file: Soham builds his fake /ask branch from this, and web/index.html reads it. Frozen contract, all values real, from Bhushan's GROUND_TRUTH.md. Do not fork it - if you change the shape, change it here and tell both consumers.",
+
+  "contract": {
+    "method": "POST",
+    "path": "/ask",
+    "body": "{ question }",
+    "response": "SSE stream of { answer, trail[], stale[] }",
+    "health": "GET /health",
+    "native_eventsource_warning": "POST means EventSource will NOT work. Use fetch() + response.body.getReader(). A stuck spinner at Gate 2 is this bug, not a server bug."
+  },
+
+  "shape_notes": {
+    "answer": "Array of short strings. The frontend concatenates and renders one per tick, so a streamer can be tested against real content. Backend may stream a single string; join it.",
+    "trail": "Ordered chain, index 0 first. Each row carries the edge label that linked it to the PREVIOUS row.",
+    "trail[].type": "Chip label / badge. One of: Person, Decision, Document, Message, Service, Project, Team.",
+    "trail[].name": "Main chip text.",
+    "trail[].detail": "Secondary text. Expands when the chip is clicked to show the raw sub-result.",
+    "trail[].date": "Secondary text on the chip. Present on EVERY row. May be empty string where the fact has no date (e.g. blast radius) - empty is a value, missing the key is a bug.",
+    "trail[].via_edge": "The edge label drawn between this chip and the previous one. NEVER dropped - without it the trail is a list of things that happened to be near each other instead of a proof chain.",
+    "stale": "Renders as a warning badge on the matching chip. Match by (type, name), not by index.",
+    "stale[].type": "Same vocabulary as trail[].type.",
+    "stale[].name": "Must exactly match a trail[] name to badge it. If it does not match anything, it renders as a standalone warning line - which is correct, not a failure.",
+    "stale[].reason": "Why it is stale. Shown in the badge tooltip.",
+    "stale[].last_verified_at": "Date the staleness was established. Drives the badge tooltip."
+  },
+
+  "via_edge_vocabulary": [
+    "CONTRIBUTED_TO",
+    "OWNED_BY",
+    "EVIDENCED_BY",
+    "SUPERSEDES",
+    "MENTIONS",
+    "HAS_DEPENDENT",
+    "DEPENDS_ON",
+    "MEMBER_OF",
+    "ON_CALL"
+  ],
+
+  "cases": {
+    "demo": {
+      "id": "demo",
+      "is_demo_beat": "beat 1 + 2 - the typed multi-hop question and the streaming answer",
+      "question": "Who knows about the payments service, what breaks if it goes down, and where was that decided?",
+      "answer": [
+        "Ravi Menon is the right person to ask about payments right now. ",
+        "He has owned payments-gateway since 2026-04-15, when ownership moved ",
+        "from Priya Sharma. ",
+        "Priya Sharma still has the most commits on it (14), ",
+        "but her last touch was 2026-04-15 and she left the company that day, ",
+        "so she is not a current answer. ",
+        "The migration was decided in D-14 on 2026-03-18, ",
+        "which has since been superseded by D-19 on 2026-05-06: ",
+        "dual provider, Adyen primary. ",
+        "If payments-gateway goes down, 8 services break across 3 hops. ",
+        "The evaluation doc payments-provider-eval-v3.md still says Stripe-only ",
+        "and is out of date - follow D-19, not the doc."
+      ],
+      "trail": [
+        {
+          "type": "Person",
+          "name": "Priya Sharma",
+          "detail": "14 commits on payments-migration, last touch 2026-04-15. Highest volume on the project, but not the right person to ask - see stale[].",
+          "date": "2026-04-15",
+          "via_edge": "CONTRIBUTED_TO"
+        },
+        {
+          "type": "Person",
+          "name": "Ravi Menon",
+          "detail": "Current owner of payments-gateway since 2026-04-15, per decision D-21. Platform team. On the Ledger rotation.",
+          "date": "2026-04-15",
+          "via_edge": "OWNED_BY"
+        },
+        {
+          "type": "Decision",
+          "name": "D-14",
+          "detail": "2026-03-18 - \"Migrate payments to a single provider: Stripe\". Author Elena Vasquez. Status: superseded.",
+          "date": "2026-03-18",
+          "via_edge": "SUPERSEDES"
+        },
+        {
+          "type": "Decision",
+          "name": "D-19",
+          "detail": "2026-05-06 - \"Dual provider: Adyen primary, Stripe fallback\". Author Elena Vasquez. Status: active. This is the current decision.",
+          "date": "2026-05-06",
+          "via_edge": "SUPERSEDES"
+        },
+        {
+          "type": "Document",
+          "name": "payments-provider-eval-v3.md",
+          "detail": "Evaluation doc dated 2026-03-18. States single-provider Stripe. Contradicted by D-19 - stale, do not rely on it.",
+          "date": "2026-03-18",
+          "via_edge": "EVIDENCED_BY"
+        },
+        {
+          "type": "Message",
+          "name": "#inc-payments",
+          "detail": "2026-03-28 - \"payments timeouts again after deploy\". Evidence that the single-provider choice was under pressure before D-19 changed it.",
+          "date": "2026-03-28",
+          "via_edge": "MENTIONS"
+        }
+      ],
+      "stale": [
+        {
+          "type": "Person",
+          "name": "Priya Sharma",
+          "reason": "Left the company 2026-04-15. Highest commit volume on payments but no longer current - ownership moved to Ravi Menon via D-21.",
+          "last_verified_at": "2026-04-15"
+        },
+        {
+          "type": "Document",
+          "name": "payments-provider-eval-v3.md",
+          "reason": "Contradicted by D-19 (2026-05-06). States Stripe-only; the active decision is dual-provider with Adyen primary.",
+          "last_verified_at": "2026-03-18"
+        },
+        {
+          "type": "Decision",
+          "name": "D-14",
+          "reason": "Superseded by D-19 on 2026-05-06. Reading D-14 without following the SUPERSEDES edge gives the wrong answer.",
+          "last_verified_at": "2026-05-06"
+        }
+      ]
+    },
+
+    "failure": {
+      "id": "failure",
+      "is_demo_beat": "beat 5 - the non-fabrication proof. Empty trail is a DESIGNED state, not an error.",
+      "question": "Who owns config-service?",
+      "answer": [
+        "Nobody - that is a real answer, not a gap in the data. ",
+        "config-service has no :OWNED_BY edge in the graph. ",
+        "There is no team and no person attached to it. ",
+        "Mei Lin is the most recent contributor to it and is a reasonable person to ask ",
+        "about it, but she does not own it. ",
+        "I won't name an owner, because none exists in the graph."
+      ],
+      "trail": [],
+      "stale": []
+    },
+
+    "stale_ranking": {
+      "id": "stale_ranking",
+      "is_demo_beat": "beat 3 - the trap. The naive ORDER BY commits DESC answer is Priya and it is the WRONG answer. Do not flatten this tension.",
+      "question": "Who should I ask about the payments service?",
+      "answer": [
+        "Ravi Menon. ",
+        "But the reason matters, so here is the tension rather than a clean answer. ",
+        "Priya Sharma has the most commits on payments-migration - 14 of them. ",
+        "By volume alone she is the top contributor. ",
+        "Her last touch was 2026-04-15 and she left the company on that date, ",
+        "so that volume is history, not current knowledge. ",
+        "Ravi Menon took ownership on 2026-04-15 and is still active on the project. ",
+        "Ana Duarte is worth a second opinion if the question touches ledger: ",
+        "she is the only person who has worked on both payments and ledger. ",
+        "So: most commits = Priya. Best person to ask now = Ravi."
+      ],
+      "trail": [
+        {
+          "type": "Person",
+          "name": "Priya Sharma",
+          "detail": "14 commits - the highest volume on payments-migration. But last_touch 2026-04-15 and MEMBER_OF carries valid_to=2026-04-15. This is the stale top of the ranking.",
+          "date": "2026-04-15",
+          "via_edge": "CONTRIBUTED_TO"
+        },
+        {
+          "type": "Person",
+          "name": "Ravi Menon",
+          "detail": "Current owner since 2026-04-15. Lower commit count, recent last_touch, active MEMBER_OF with no valid_to. This is the correct answer.",
+          "date": "2026-05-02",
+          "via_edge": "OWNED_BY"
+        },
+        {
+          "type": "Person",
+          "name": "Ana Duarte",
+          "detail": "The only person with contributions to both a payments project and a ledger project - the one cross-team bridge. Ledger team lead.",
+          "date": "",
+          "via_edge": "CONTRIBUTED_TO"
+        }
+      ],
+      "stale": [
+        {
+          "type": "Person",
+          "name": "Priya Sharma",
+          "reason": "Left the company 2026-04-15. Ranked first by commit volume, which is exactly why a volume-only query returns the wrong person.",
+          "last_verified_at": "2026-04-15"
+        }
+      ]
+    },
+
+    "blast_radius": {
+      "id": "blast_radius",
+      "is_demo_beat": "beat 2 supporting - what breaks, and who gets paged.",
+      "question": "What breaks if payments-gateway dies?",
+      "answer": [
+        "8 services break, across 3 hops. ",
+        "Directly: checkout-api, config-service, dispute-service, mobile-bff, notifications, webhook-relay. ",
+        "One hop further out: fraud-scoring. ",
+        "Two hops: recommendation. ",
+        "Ownership is split - checkout-api, mobile-bff and dispute-service sit with Payments, ",
+        "notifications and recommendation with Growth, fraud-scoring with Risk. ",
+        "config-service has no team at all, so there is nobody to page for it. ",
+        "ledger-core and settlement-batch do NOT break - they are upstream of payments-gateway. ",
+        "One risk: notifications has had no contributor touch since 2026-05-02, ",
+        "so its owner may not be able to respond quickly."
+      ],
+      "trail": [
+        {
+          "type": "Service",
+          "name": "checkout-api",
+          "detail": "depth 1 - owned by team Payments",
+          "date": "",
+          "via_edge": "HAS_DEPENDENT"
+        },
+        {
+          "type": "Service",
+          "name": "config-service",
+          "detail": "depth 1 - NO owner and NO team. Nothing to page.",
+          "date": "",
+          "via_edge": "HAS_DEPENDENT"
+        },
+        {
+          "type": "Service",
+          "name": "dispute-service",
+          "detail": "depth 1 - owned by team Payments",
+          "date": "",
+          "via_edge": "HAS_DEPENDENT"
+        },
+        {
+          "type": "Service",
+          "name": "mobile-bff",
+          "detail": "depth 1 - owned by team Payments",
+          "date": "",
+          "via_edge": "HAS_DEPENDENT"
+        },
+        {
+          "type": "Service",
+          "name": "notifications",
+          "detail": "depth 1 - owned by team Growth. No contributor since 2026-05-02 - bus-factor risk.",
+          "date": "",
+          "via_edge": "HAS_DEPENDENT"
+        },
+        {
+          "type": "Service",
+          "name": "webhook-relay",
+          "detail": "depth 1 - owned by team Platform",
+          "date": "",
+          "via_edge": "HAS_DEPENDENT"
+        },
+        {
+          "type": "Service",
+          "name": "fraud-scoring",
+          "detail": "depth 2 - owned by team Risk (Diego Alvarez)",
+          "date": "",
+          "via_edge": "HAS_DEPENDENT"
+        },
+        {
+          "type": "Service",
+          "name": "recommendation",
+          "detail": "depth 3 - owned by team Growth",
+          "date": "",
+          "via_edge": "HAS_DEPENDENT"
+        }
+      ],
+      "stale": [
+        {
+          "type": "Service",
+          "name": "notifications",
+          "reason": "No contributor touch since 2026-05-02, over 90 days stale. One hop from payments-gateway.",
+          "last_verified_at": "2026-05-02"
+        }
+      ]
+    }
+  },
+
+  "excluded_upstream": {
+    "_note": "Deliberately NOT in blast_radius. These depend on ledger-core, which is upstream of payments-gateway. If your query returns these, your edge direction is inverted.",
+    "services": ["ledger-core", "settlement-batch"]
+  }
+}
