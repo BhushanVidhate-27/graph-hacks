@@ -42,3 +42,7 @@ env/
 # OS noise (.DS_Store is already in the repo history; this stops new ones)
 .DS_Store
 Thumbs.db
+
+# macOS Finder noise. It was tracked, which meant every teammate who opened
+# the folder re-dirtied the working tree. Untracked and ignored from here.
+.DS_Store
