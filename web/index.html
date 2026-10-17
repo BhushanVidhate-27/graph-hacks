@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Helio · Company Brain</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#151b23; --panel-2:#1c232c; --line:#2a323d;
+    --ink:#e6edf3; --ink-2:#9aa7b4; --ink-3:#6b7785;
+    --accent:#4c9aff; --warn:#f0a72a; --warn-bg:#3a2a0d; --ok:#3fb950;
+    --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font:15px/1.6 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    padding:32px 24px 80px;
+  }
+  .wrap{max-width:1100px;margin:0 auto}
+  header h1{font-size:20px;margin:0 0 4px;font-weight:600;letter-spacing:-.01em}
+  header p{margin:0 0 24px;color:var(--ink-3);font-size:13px}
+  header .src{color:var(--ink-2)}
+
+  .ask{display:flex;gap:8px;margin-bottom:20px}
+  .ask input{
+    flex:1;background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    padding:12px 14px;border-radius:var(--radius);font:inherit;font-size:15px;
+  }
+  .ask input:focus{outline:none;border-color:var(--accent)}
+  .ask button{
+    background:var(--accent);color:#0d1117;border:0;padding:12px 22px;border-radius:var(--radius);
+    font:inherit;font-weight:600;cursor:pointer;
+  }
+  .ask button:disabled{opacity:.5;cursor:not-allowed}
+
+  .cases{margin:-8px 0 20px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .cases .lbl{color:var(--ink-3);font-size:12px;margin-right:4px}
+  .cases button{
+    background:var(--panel);border:1px solid var(--line);color:var(--ink-2);
+    padding:5px 10px;border-radius:999px;font:inherit;font-size:12px;cursor:pointer;
+  }
+  .cases button:hover{border-color:var(--accent);color:var(--ink)}
+
+  .answer{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;margin-bottom:24px;min-height:60px;
+  }
+  .answer .placeholder{color:var(--ink-3);font-size:14px}
+  .answer .txt{white-space:pre-wrap}
+  .caret{display:inline-block;width:2px;height:1.05em;background:var(--accent);
+    vertical-align:text-bottom;animation:bl 1s steps(2) infinite}
+  @keyframes bl{50%{opacity:0}}
+
+  .trailwrap{margin-bottom:32px}
+  .trailwrap h2{
+    font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);
+    margin:0 0 12px;font-weight:600;
+  }
+
+  /* THE PRODUCT: a chain of chips, each labelled with the edge that got us there */
+  .trail{display:flex;flex-wrap:wrap;align-items:stretch;gap:0}
+  .chip{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:10px 12px;cursor:pointer;text-align:left;font:inherit;color:var(--ink);
+    min-width:150px;max-width:260px;transition:border-color .12s ease;
+    animation:fade .25s ease both;
+  }
+  @keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  .chip:hover{border-color:var(--accent)}
+  .chip .t{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);margin-bottom:3px}
+  .chip .n{font-weight:600;font-size:14px;line-height:1.35;word-break:break-word}
+  .chip .d{font-size:11px;color:var(--ink-3);margin-top:3px;font-variant-numeric:tabular-nums}
+  .chip.stale{border-color:var(--warn)}
+  .chip .warn{
+    display:inline-block;margin-top:6px;font-size:10px;font-weight:700;letter-spacing:.05em;
+    background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn);
+    border-radius:4px;padding:1px 5px;
+  }
+  .chip[aria-expanded="true"]{border-color:var(--accent)}
+  .chip .raw{
+    margin-top:9px;padding-top:9px;border-top:1px dashed var(--line);
+    font-size:12px;color:var(--ink-2);white-space:pre-wrap;word-break:break-word;
+    max-height:260px;overflow:auto;
+  }
+
+  /* the edge label — the reason this is not a list */
+  .edge{
+    display:flex;align-items:center;gap:5px;padding:0 9px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:10px;letter-spacing:.03em;color:var(--accent);
+    align-self:center;white-space:nowrap;
+  }
+  .edge::before,.edge::after{content:"";width:10px;height:1px;background:var(--line);flex:none}
+
+  /* empty trail: a confident designed state, not an error */
+  .nopath{
+    background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--ok);
+    border-radius:var(--radius);padding:14px 16px;color:var(--ink-2);font-size:14px;
+  }
+  .nopath b{color:var(--ink)}
+
+  .standalonestale{
+    margin-top:12px;background:var(--warn-bg);border:1px solid var(--warn);
+    border-radius:var(--radius);padding:10px 12px;font-size:13px;color:var(--ink);
+  }
+  .standalonestale .h{font-weight:600;color:var(--warn);margin-bottom:4px}
+  .standalonestale .r{color:var(--ink-2);font-size:12px}
+  .err{background:#3a1a1a;border:1px solid #f85149;border-radius:var(--radius);padding:12px 14px;color:#ffb3ad;font-size:13px}
+
+  .errbar{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:8px 12px;margin-bottom:20px;font-size:12px;color:var(--ink-3);
+    display:flex;justify-content:space-between;gap:12px;align-items:center;
+  }
+  .errbar code{color:var(--accent);font-family:ui-monospace,Menlo,monospace}
+
+  @media (max-width:640px){
+    .edge{padding:6px 0 6px 18px;width:100%}
+    .edge::before{width:12px}
+    .chip{max-width:100%;width:100%}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Helio · Company Brain</h1>
+    <p>Graph traversal, not text search. Source: <span class="src" id="srcline">—</span></p>
+  </header>
+
+  <div class="errbar">
+    <span>Frontend owner: Ujwal · <code>web/</code> + <code>mock/</code> · one <code>fetch()</code> call site</span>
+    <span id="mode"></span>
+  </div>
+
+  <form class="ask" id="askform">
+    <input id="q" autocomplete="off" placeholder="Who knows about the payments service, what breaks if it goes down, and where was that decided?" />
+    <button id="go" type="submit">Ask</button>
+  </form>
+
+  <div class="cases" id="cases"></div>
+
+  <div class="answer" id="answer">
+    <span class="placeholder">Ask a multi-hop question. The answer will show its path.</span>
+  </div>
+
+  <div class="trailwrap" id="trailwrap" hidden>
+    <h2>Provenance trail</h2>
+    <div class="trail" id="trail"></div>
+    <div id="standalonestale"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ────────────────────────────────────────────────────────────────────────────
+   UJOWAL — web/index.html
+   The provenance trail is the product. Everything else is furniture.
+
+   NO BUILD STEP. NO FRAMEWORK. Single file.
+
+   ── THE ONE-LINE SWITCH ────────────────────────────────────────────────────
+   MOCK MODE (default): serves the fixture and synthesises the stream.
+   REAL MODE (Gate 2):  points at Soham's POST /ask SSE endpoint.
+
+   MOCK_FIXTURE is relative to THIS file (web/), which sits next to the repo's
+   mock/ directory — so it must climb one level. Getting this wrong is a silent
+   404 and a blank trail, which looks exactly like a broken renderer.
+   ────────────────────────────────────────────────────────────────────────── */
+const ENDPOINT = "../mock/trail.json";   // ← change to "/ask" at Gate 2. That is the entire swap.
+
+const $ = (s) => document.querySelector(s);
+const el = (t, c) => { const n = document.createElement(t); if (c) n.className = c; return n; };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. THE SINGLE fetch() CALL SITE
+   Everything upstream of the renderer goes through here. Do not add another.
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function* askStream(question) {
+  if (ENDPOINT.endsWith(".json")) {
+    /* ── MOCK MODE ─────────────────────────────────────────────────────────
+       No network round trip per chunk: we still use ONE fetch to get the
+       fixture, then replay its answer[] as the stream would arrive. This is
+       what makes the streamer testable against real content. */
+    const fixture = await loadFixture();
+    const match = pickCase(fixture, question);
+    for (const chunk of match.answer) { await sleep(14); yield { part: "answer", text: chunk }; }
+    for (const row of match.trail) { await sleep(60); yield { part: "trail", row }; }
+    for (const row of match.stale) yield { part: "stale", row };
+    yield { part: "done", answer: match.answer.join(""), trail: match.trail, stale: match.stale };
+    return;
+  }
+
+  /* ── REAL MODE ────────────────────────────────────────────────────────────
+     POST /ask returns an SSE stream. Native EventSource is GET-only and will
+     NOT work here — this is fetch() + response.body.getReader() by necessity,
+     not preference. If the spinner hangs at Gate 2, this block is the suspect. */
+  const res = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+    body: JSON.stringify({ question }),
+  });
+  if (!res.ok || !res.body) throw new Error(`POST ${ENDPOINT} → ${res.status}`);
+
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", seenTrail = false, seenStale = false, text = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+
+    /* SSE framing: events separated by a blank line, payload prefixed `data:`.
+       Tolerate a server that sends bare JSON with no framing at all. */
+    let cut, payload = null;
+    if ((cut = buf.indexOf("\n\n")) !== -1) {
+      const raw = buf.slice(0, cut); buf = buf.slice(cut + 2);
+      payload = raw.split("\n")
+        .filter((l) => l.startsWith("data:"))
+        .map((l) => l.slice(5).trim())
+        .join("");
+    }
+    if (payload === null && buf.trim().startsWith("{")) { payload = buf.trim(); buf = ""; }
+    if (!payload || payload === "[DONE]") continue;
+
+    let msg; try { msg = JSON.parse(payload); } catch { continue; }
+
+    /* Accumulate the answer text, streaming as it arrives. */
+    if (typeof msg.answer === "string" && msg.answer !== text) {
+      if (text && msg.answer.startsWith(text)) text = msg.answer;       // cumulative
+      else if (msg.answer !== text) text += msg.answer;                 // delta
+      yield { part: "answer", text: msg.answer, mode: text === msg.answer ? "replace" : "append" };
+    }
+    if (Array.isArray(msg.trail)) {
+      for (const row of msg.trail) { if (!seenTrail) { seenTrail = true; yield { part: "trail", row }; } else yield { part: "trail", row }; }
+    }
+    if (Array.isArray(msg.stale)) for (const row of msg.stale) { seenStale = true; yield { part: "stale", row }; }
+  }
+  if (!seenTrail) yield { part: "trail", row: null };  // render the empty state
+  yield { part: "done", answer: text, trail: [], stale: seenStale ? [] : [] };
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* The fixture is loaded once and shared by the stream and the demo picker.
+   This is why the whole file has only two fetch() sites: one for the fixture
+   (mock mode) and one for the real SSE POST. They are different transports,
+   so this is the honest floor, not a shortcut. */
+let _fixture = null;
+async function loadFixture() {
+  if (!_fixture) {
+    const res = await fetch(ENDPOINT, { cache: "no-store" });
+    if (!res.ok) throw new Error(`fixture ${res.status}`);
+    _fixture = await res.json();
+  }
+  return _fixture;
+}
+
+/* Fixture → question. Exact match first, then first token overlap, so a
+   reworded question in the demo box still lands on a real case. */
+function pickCase(fixture, question) {
+  const cases = Object.values(fixture.cases);
+  const q = question.toLowerCase().trim();
+  const exact = cases.find((c) => c.question.toLowerCase().trim() === q);
+  if (exact) return exact;
+  const scored = cases.map((c) => {
+    const t = new Set(c.question.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/));
+    const hit = q.replace(/[^\w\s]/g, "").split(/\s+/).filter((w) => w.length > 3 && t.has(w)).length;
+    return { c, hit };
+  }).sort((a, b) => b.hit - a.hit);
+  return scored[0].hit > 0 ? scored[0].c : cases[0];
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. THE PROVENANCE RENDERER  ← spend your hours here
+   A chain of clickable chips, each labelled with the EDGE that produced it.
+   Without the edge labels this is a list of things that happened to be near
+   each other. With them it is a proof chain — which is the thesis of the entry.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function renderTrail(rows) {
+  const host = $("#trail"); host.textContent = "";
+  if (!rows || rows.length === 0) { renderEmptyState(); return; }
+  $("#trailwrap").hidden = false;
+  host.style.display = "flex";
+
+  rows.forEach((row, i) => {
+    /* the edge that linked THIS chip to the previous one. Never skipped. */
+    if (i > 0 && row.via_edge) host.appendChild(edgeEl(row.via_edge));
+
+    const chip = el("button", "chip");
+    chip.type = "button";
+    chip.setAttribute("aria-expanded", "false");
+    chip.style.animationDelay = `${Math.min(i * 40, 400)}ms`;
+
+    const t = el("div", "t"); t.textContent = row.type || "";
+    const n = el("div", "n"); n.textContent = row.name || "";
+    chip.append(t, n);
+
+    if (row.date) { const d = el("div", "d"); d.textContent = row.date; chip.appendChild(d); }
+
+    const badge = STALE.get(`${row.type}|${row.name}`);
+    if (badge) {
+      const w = el("span", "warn"); w.textContent = "⚠ STALE";
+      chip.appendChild(w);
+      chip.classList.add("stale");
+      chip.title = `${badge.reason} (last verified ${badge.last_verified_at})`;
+    }
+
+    /* Click expands the raw sub-result, so a judge sees actual query output
+       rather than a summary the UI wrote for them. */
+    chip.addEventListener("click", () => {
+      const open = chip.getAttribute("aria-expanded") === "true";
+      chip.setAttribute("aria-expanded", String(!open));
+      const existing = chip.querySelector(".raw");
+      if (existing) { existing.remove(); return; }
+      const raw = el("div", "raw");
+      raw.textContent = formatRaw(row, badge);
+      chip.appendChild(raw);
+    });
+    host.appendChild(chip);
+  });
+
+  renderStandaloneStale(rows);
+}
+
+function edgeEl(label) {
+  const e = el("div", "edge");
+  e.textContent = label;
+  return e;
+}
+
+function formatRaw(row, badge) {
+  const lines = [
+    `type      ${row.type}`,
+    `name      ${row.name}`,
+    `detail    ${row.detail || "—"}`,
+    `date      ${row.date || "—"}`,
+    `via_edge  ${row.via_edge || "— (chain start)"}`,
+  ];
+  if (badge) {
+    lines.push("", `⚠ stale — ${badge.reason}`, `  last_verified_at  ${badge.last_verified_at}`);
+  }
+  return lines.join("\n");
+}
+
+/* Empty trail is a DESIGNED state — it is demo beat 5, the proof the agent
+   does not fabricate. It must read as a confident answer, not a broken page. */
+function renderEmptyState() {
+  const host = $("#trail"); host.textContent = ""; host.style.display = "block";
+  const box = el("div", "nopath");
+  box.innerHTML = "<b>No path to render — because none exists.</b><br>"
+    + "This is a real negative answer, not a failed lookup. The graph has no edge "
+    + "for this question, so the agent said so instead of inventing one.";
+  host.appendChild(box);
+  renderStandaloneStale([]);
+}
+
+/* stale[] entries that match no chip still deserve to be seen. */
+const STALE = new Map();
+function renderStandaloneStale(rows) {
+  const host = $("#standalonestale"); host.textContent = "";
+  const names = new Set((rows || []).map((r) => `${r.type}|${r.name}`));
+  const orphans = [...STALE.entries()].filter(([k]) => !names.has(k));
+  for (const [, s] of orphans) {
+    const box = el("div", "standalonestale");
+    const h = el("div", "h"); h.textContent = `⚠ STALE · ${s.type} · ${s.name}`;
+    const r = el("div", "r"); r.textContent = `${s.reason} (last verified ${s.last_verified_at})`;
+    box.append(h, r);
+    host.appendChild(box);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. STREAMING ANSWER
+   ═══════════════════════════════════════════════════════════════════════════ */
+let currentText = "";
+function setAnswer(text, streaming) {
+  currentText = text;
+  const box = $("#answer");
+  box.textContent = "";
+  const p = el("div", "txt");
+  p.textContent = text;
+  box.appendChild(p);
+  if (streaming) p.appendChild(el("span", "caret"));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. WIRING
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function run(question) {
+  const btn = $("#go"); btn.disabled = true;
+  STALE.clear();
+  $("#trailwrap").hidden = true;
+  $("#trail").textContent = "";
+  $("#standalonestale").textContent = "";
+  setAnswer("", true);
+
+  const seen = [];
+  try {
+    for await (const ev of askStream(question)) {
+      if (ev.part === "answer") {
+        setAnswer(ev.mode === "replace" ? ev.text : currentText + ev.text, true);
+      } else if (ev.part === "trail") {
+        if (ev.row) seen.push(ev.row);
+        renderTrail(seen);
+      } else if (ev.part === "stale") {
+        STALE.set(`${ev.row.type}|${ev.row.name}`, ev.row);
+        renderTrail(seen);
+      } else if (ev.part === "done") {
+        setAnswer(ev.answer || currentText, false);
+      }
+    }
+    if (!seen.length) renderEmptyState();
+  } catch (err) {
+    $("#answer").textContent = "";
+    const e = el("div", "err");
+    e.textContent = `Request failed: ${err.message}. If the endpoint is a mock fixture, it must be served over HTTP (not opened as file://) or the fetch is blocked.`;
+    $("#answer").appendChild(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$("#askform").addEventListener("submit", (e) => { e.preventDefault(); run($("#q").value); });
+
+/* Mock-mode case picker. Lets the five demo beats be exercised without a
+   backend. Hidden in real mode so it never ships. */
+async function init() {
+  const isMock = ENDPOINT.endsWith(".json");
+  $("#srcline").textContent = isMock ? "mock fixture (offline)" : ENDPOINT;
+  $("#mode").innerHTML = isMock ? "<b>MOCK MODE</b> — one-line switch in <code>ENDPOINT</code>" : "<b>REAL MODE</b>";
+  if (!isMock) return;
+  try {
+    const fixture = await loadFixture();
+    const host = $("#cases");
+    const lbl = el("span", "lbl"); lbl.textContent = "demo beats:";
+    host.appendChild(lbl);
+    for (const c of Object.values(fixture.cases)) {
+      const b = el("button"); b.type = "button";
+      b.textContent = c.id.replace(/_/g, " ");
+      b.title = c.question;
+      b.addEventListener("click", () => { $("#q").value = c.question; run(c.question); });
+      host.appendChild(b);
+    }
+  } catch { /* picker is a convenience; the main flow reports its own errors */ }
+}
+init();
+</script>
+</body>
+</html>
