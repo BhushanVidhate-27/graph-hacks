@@ -185,7 +185,7 @@ def expertise(service: str) -> dict[str, Any]:
         out_rows.append({"person": "current owner (per decision)", "detail": owner[0][0],
                          "latest": owner[0][1], "commits": None, "stale": False})
         trail.append({"type": "Decision", "name": "ownership", "detail": owner[0][0],
-                      "date": owner[0][1], "via_edge": "ABOUT"})
+                      "date": owner[0][1], "via_edge": "EVIDENCED_BY"})
 
     return {"service": service, "rows": out_rows, "trail": _trail(trail),
             "count": len(out_rows)}
@@ -241,8 +241,17 @@ def provenance(project: str) -> dict[str, Any]:
             "evidence": ev_names, "superseded_by": sup_id,
             "supersedes_summary": sup_summary, "detail": detail,
         })
+        # via_edge is restricted to Ujwal's FROZEN vocabulary of 9 values
+        # (mock/trail.json -> via_edge_vocabulary). "ABOUT" is NOT in it. An
+        # unrecognised edge renders a chip the frontend has no style for, and the
+        # renderer is already merged and tested against the fixture.
+        #   chained decision -> SUPERSEDES  (it was reached via the chain)
+        #   unchained        -> EVIDENCED_BY (it was reached via its evidence)
+        # If the team wants ABOUT rendered properly that is a one-word addition to
+        # the vocabulary on Ujwal's side, not something to smuggle in from here.
+        chained = bool(sup_id) or status == "superseded"
         trail.append({"type": "Decision", "name": did, "detail": detail,
-                      "date": dt, "via_edge": "SUPERSEDES" if sup_id else "ABOUT"})
+                      "date": dt, "via_edge": "SUPERSEDES" if chained else "EVIDENCED_BY"})
         for ev in ev_names:
             trail.append({"type": "Document", "name": ev,
                           "detail": "evidence for " + did, "date": dt,
@@ -289,9 +298,9 @@ def staleness() -> dict[str, Any]:
     for etype, last in edges:
         out_rows.append({"type": "edge", "name": etype, "last_verified_at": last,
                          "reason": f"not re-verified since {last}"})
-        trail.append({"type": "edge", "name": etype,
-                      "detail": f"not re-verified since {last}", "date": last,
-                      "via_edge": "last_verified_at"})
+        # Deliberately NOT added to trail. The stale thing here is a PROPERTY
+        # (last_verified_at), not an edge, and the frozen via_edge vocabulary has
+        # no entry for a property name. The row above still carries it.
 
     for name, last, cited in docs:
         contradicted = [c for c in cited if c]
@@ -396,10 +405,10 @@ def on_call(team: str) -> dict[str, Any]:
 
     trail = _trail([{"type": "Person", "name": n, "detail": "ON CALL this week",
                      "date": w, "via_edge": "ON_CALL"} for n, w in now])
-    trail += _trail([{"type": "Person", "name": n,
-                      "detail": "on the rotation, not on call this week",
-                      "date": "", "via_edge": "HAS_ROTATION"} for n in not_on])
-    return {"team": team, "rows": rows, "trail": trail, "count": len(rows)}
+    # Rotation members who are NOT on call stay in rows but not in trail:
+    # HAS_ROTATION is not in the frozen via_edge vocabulary.
+    return {"team": team, "rows": rows, "trail": trail, "count": len(rows),
+            "on_call": on_names, "rotation_not_on_call": not_on}
 
 
 def sla_of(service: str) -> dict[str, Any]:
@@ -416,7 +425,8 @@ def sla_of(service: str) -> dict[str, Any]:
         {"service": service}).result_set if r[0]]
     return {"service": service, "rows": [{"sla": s} for s in rows],
             "trail": _trail([{"type": "Service", "name": service,
-                              "detail": f"SLA {s}", "via_edge": "SLA"} for s in rows]),
+                              "detail": f"SLA {s}",
+                              "via_edge": "OWNED_BY"} for s in rows]),
             "count": len(rows)}
 
 
