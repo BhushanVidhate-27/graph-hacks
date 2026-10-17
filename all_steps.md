@@ -721,18 +721,31 @@ structurally valid edges. Nobody else on this team can check the truth.
 </details>
 
 <details>
-<summary><b>58. Fix facts 5 and 6 before you generate anything ⚠️</b></summary>
+<summary><b>58. Fix facts 5 and 6 before you generate anything ⚠️</b> — <b>DONE 2026-10-17</b></summary>
 
-The DAG and the blast-radius facts currently **disagree**.
+**Resolved.** The DAG and the blast-radius facts disagreed.
 
-Walking `HAS_DEPENDENT` forward from `payments-gateway` gives `checkout-api`,
+Walking `HAS_DEPENDENT` forward from `payments-gateway` gave `checkout-api`,
 `mobile-bff`, `webhook-relay`, `dispute-service`, `notifications`,
-`config-service`, `fraud-scoring`, `recommendation`. Facts 5 and 6 list
+`config-service`, `fraud-scoring`, `recommendation`. Facts 5 and 6 listed
 `ledger-core` and `settlement-batch` — those are **upstream** of payments, not
 downstream.
 
-The generator cannot satisfy both. Reconcile this before it becomes a Gate 2
-failure.
+The generator could not satisfy both. Reconciled four ways, all verified by
+script rather than by eye:
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | DAG was **cyclic** — `api-gateway → web-frontend → api-gateway` and `api-gateway → admin-bff → api-gateway` | `auth-service` and `api-gateway` no longer fan out to all public services |
+| 2 | That fan-in inflated payments' blast radius to **14** services, mostly frontend/edge noise | same fix — blast radius is now exactly **8** services across 3 hops |
+| 3 | Facts 5 and 6 listed **upstream** services | rewritten to the real 8, depths included |
+| 4 | `ledger-core` had **no row** in the DAG despite 7 services depending on it | added as a root — the count is **20 services, 22 `DEPENDS_ON` edges** |
+
+Fact 7 was also re-pointed from `settlement-batch` to `notifications`:
+`settlement-batch` depends on `ledger-core`, so it is not in the payments
+blast radius and the question was unanswerable as written.
+
+`GROUND_TRUTH.md` and `bhushan.md` §5 are updated. This step is closed.
 
 </details>
 
@@ -834,11 +847,40 @@ just echoing text.
 </details>
 
 <details>
-<summary><b>67. Build the 18-service dependency DAG as one table</b></summary>
+<summary><b>67. Build the 20-service dependency DAG as one table</b> — <b>DONE 2026-10-17</b></summary>
 
-One row means "this service depends on these". Expand the two
-`all public services` rows into explicit rows so the DAG is unambiguous — a
-vague row produces a vague blast radius.
+One row means "this service depends on these". The DAG is **fixed and verified
+acyclic** — 20 services, 22 `DEPENDS_ON` edges:
+
+```
+ledger-core       -> (none)
+payments-gateway  -> ledger-core
+checkout-api      -> payments-gateway
+mobile-bff        -> payments-gateway
+webhook-relay     -> payments-gateway
+settlement-batch  -> ledger-core
+dispute-service   -> payments-gateway, ledger-core
+billing-invoicing -> ledger-core
+notifications     -> payments-gateway, dispute-service
+reporting-etl     -> ledger-core, billing-invoicing
+search-index      -> reporting-etl
+fraud-scoring     -> checkout-api
+auth-service      -> (none)
+session-store     -> auth-service
+api-gateway       -> (none)
+config-service    -> payments-gateway, auth-service
+user-profile      -> auth-service
+recommendation    -> fraud-scoring, user-profile
+web-frontend      -> api-gateway
+admin-bff         -> api-gateway
+```
+
+**The two "all public services" rows are gone, deliberately.** Expanding them
+is what created the cycles and the 14-service blast radius — see step 58. The
+public tier is the edge; it is downstream of nothing.
+
+Use this table verbatim. Do not re-derive it, and do not bend it to match an
+expectation — print the actual computed closure and warn loudly if it disagrees.
 
 </details>
 
