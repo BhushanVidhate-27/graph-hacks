@@ -1,0 +1,26 @@
+# Keep the build context small and the image reproducible.
+# Without this the local .venv (hundreds of MB, platform-specific) is copied
+# into the image and can shadow the installed packages.
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Secrets. The image reads these from env_file at RUNTIME, never baked in.
+.env
+.env.*
+!.env.example
+
+# Git and macOS noise
+.git/
+.gitignore
+.DS_Store
+Thumbs.db
+
+# Planning docs and notebooks — not needed to run the app
+*.md
+!README.md
+.ipynb_checkpoints/

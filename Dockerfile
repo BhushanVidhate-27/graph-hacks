@@ -16,6 +16,10 @@ COPY app/ ./app/
 COPY web/ ./web/
 COPY mock/ ./mock/
 COPY data/ ./data/
+# scripts/ is needed at runtime: the compose `seed` service runs generate.py and
+# load.py inside this image to populate the graph. Omitting it made seed exit 2
+# with "can't open file '/srv/scripts/generate.py'".
+COPY scripts/ ./scripts/
 
 EXPOSE 8080
 
