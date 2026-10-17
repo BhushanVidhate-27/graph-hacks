@@ -26,6 +26,7 @@ never interpolated into the query string.
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from dotenv import load_dotenv
@@ -67,6 +68,72 @@ def _graph():
     if PASSWORD:
         kwargs["password"] = PASSWORD
     return FalkorDB(**kwargs).select_graph(GRAPH)
+
+
+def resolve_service(name: str) -> tuple[str, bool]:
+    """Map a loose human phrase onto a real Service name.
+
+    Returns (resolved_name, was_exact).
+
+    This exists because of a real, observed failure, not a hypothetical one.
+    Asked "who should I ask about the payments service?", the agent passed the
+    literal string "payments-service" to owner_of(). That node does not exist, so
+    the query returned nothing, and the agent reported — fluently and in total
+    confidence — "The graph contains no OWNED_BY edge for payments-service, and
+    no contribution history is recorded either."
+
+    payments-gateway IS owned by Platform and has 28 commits of history. The
+    Cypher was right, the database was right, and the answer was fabricated. This
+    is the single worst failure mode in the whole product: it survives a casual
+    read, because "no owner found" sounds exactly like a true negative.
+
+    So every service-taking function resolves its argument FIRST. If nothing
+    matches confidently we return the original string unchanged, so a genuinely
+    unknown service still yields the honest empty answer — resolving must never
+    invent a target that the caller did not name.
+    """
+    g = _graph()
+    names = [r[0] for r in g.query(ALL_SERVICES).result_set]
+    if name in names:
+        return name, True
+
+    low = (name or "").lower().strip()
+    if not low:
+        return name, False
+
+    # "the payments service" / "payments-service" / "Payments Service" all mean
+    # payments-gateway. Strip the generic tail before comparing.
+    for suffix in (" service", "-service", "_service", " svc"):
+        if low.endswith(suffix):
+            low = low[: -len(suffix)]
+    low = low.replace("the ", "").strip()
+
+    for n in names:
+        if n.lower() == low:
+            return n, False
+
+    hits = [n for n in names if low and low in n.lower()]
+    if len(hits) == 1:
+        return hits[0], False
+
+    # Last resort: token overlap. Only accept a UNIQUE best match — an ambiguous
+    # guess is worse than no guess, because it invents a node.
+    toks = {t for t in re.split(r"[^a-z0-9]+", low) if len(t) > 2}
+    if toks:
+        scored = []
+        for n in names:
+            nt = {t for t in re.split(r"[^a-z0-9]+", n.lower()) if len(t) > 2}
+            overlap = toks & nt
+            if overlap:
+                scored.append((len(overlap), len(n), n))
+        if scored:
+            scored.sort(reverse=True)
+            best = scored[0]
+            runner_up = scored[1] if len(scored) > 1 else None
+            if runner_up is None or best[0] > runner_up[0]:
+                return best[2], False
+
+    return name, False
 
 
 def _trail(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -123,6 +190,7 @@ def blast_radius(service: str) -> dict[str, Any]:
 
     Returns rows AND trail so Ujwal can render chips with real edge labels.
     """
+    service, _exact = resolve_service(service)
     g = _graph()
 
     owner = g.query(
@@ -180,6 +248,7 @@ def expertise(service: str) -> dict[str, Any]:
     left 2026-04-15. Collapsing this to a single number is technically correct on
     volume and the wrong answer. The agent has to be able to narrate the tension.
     """
+    service, _exact = resolve_service(service)
     g = _graph()
     rows = g.query(EXPERTISE, {"service": service}).result_set
 
@@ -345,6 +414,7 @@ def staleness() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 def owner_of(service: str) -> dict[str, Any]:
     """Team owner of a service. An unowned service returns rows=[] on purpose."""
+    service, _exact = resolve_service(service)
     g = _graph()
     rows = g.query(
         "MATCH (s:Service {name: $service})-[:OWNED_BY]->(t:Team) "
@@ -442,6 +512,7 @@ def sla_of(service: str) -> dict[str, Any]:
     reads to the agent as "an SLA exists" and is exactly the fabrication fact 20
     is testing for.
     """
+    service, _exact = resolve_service(service)
     g = _graph()
     rows = [r[0] for r in g.query(
         "MATCH (s:Service {name: $service}) RETURN s.sla AS sla",
