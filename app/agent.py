@@ -46,6 +46,48 @@ load_dotenv()
 
 MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 
+# Response budget per round. Was hardcoded at 1024, which is fine on a healthy
+# balance and fatal on a thin one: OpenRouter rejects the whole request with
+# HTTP 402 when max_tokens exceeds what the remaining balance can cover, so the
+# answer is refused outright rather than truncated. Observed live:
+#   "You requested up to 1024 tokens, but can only afford 842."
+# Overridable so a thin balance can still produce answers without a code change.
+MAX_TOKENS = int(os.getenv("ANTHROPIC_MAX_TOKENS", "1024"))
+
+# Transient failures that deserve a retry rather than a dead stream. 429 and 5xx
+# are obvious; OpenRouter's in-flight budget also surfaces as 402 with
+# Retry-After, which reads like a permanent billing failure but is not.
+_RETRY_STATUS = {402, 408, 409, 425, 429, 500, 502, 503, 504, 529}
+
+
+def _create_with_retry(client: Any, *, attempts: int = 4, **kwargs: Any) -> Any:
+    """Call client.messages.create, retrying transient failures with backoff.
+
+    Honours Retry-After when the provider sends one, otherwise backs off
+    exponentially. Gives up on anything that is not transient, so a genuine
+    missing key still fails fast with a useful message.
+    """
+    import time
+
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            return client.messages.create(**kwargs)
+        except Exception as exc:  # noqa: BLE001 - re-raised below if not transient
+            status = getattr(exc, "status_code", None)
+            if status not in _RETRY_STATUS or attempt == attempts - 1:
+                raise
+            last = exc
+            delay = 2.0 * (attempt + 1)
+            headers = getattr(getattr(exc, "response", None), "headers", None)
+            if headers:
+                try:
+                    delay = max(delay, float(headers.get("Retry-After", delay)))
+                except (TypeError, ValueError):
+                    pass
+            time.sleep(min(delay, 20.0))
+    raise last  # pragma: no cover - loop always returns or raises
+
 # How many tool-use round trips we allow before we force a final answer.
 # The compound demo question ("who knows about payments AND what breaks if it
 # goes down AND where was that decided") hits all three traversals, so we need
@@ -352,9 +394,10 @@ def run_agent(question: str) -> dict[str, Any]:
     stale: dict[tuple[str, str], dict[str, Any]] = {}
 
     for _round in range(MAX_TOOL_ROUNDS):
-        response = client.messages.create(
+        response = _create_with_retry(
+            client,
             model=MODEL,
-            max_tokens=1024,
+            max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
             tools=TOOLS,
             messages=messages,
