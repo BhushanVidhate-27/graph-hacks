@@ -188,8 +188,10 @@ async function* askStream(question) {
     const fixture = await loadFixture();
     const match = pickCase(fixture, question);
     for (const chunk of match.answer) { await sleep(14); yield { part: "answer", text: chunk }; }
-    for (const row of match.trail) { await sleep(60); yield { part: "trail", row }; }
-    for (const row of match.stale) yield { part: "stale", row };
+    /* One row at a time so chips reveal left-to-right in the demo. `replace:false`
+       because this is a DELTA — the next row is additive, not a new snapshot. */
+    for (const row of match.trail) { await sleep(60); yield { part: "trail", rows: [row], replace: false }; }
+    for (const row of match.stale) yield { part: "stale", rows: [row], replace: false };
     yield { part: "done", answer: match.answer.join(""), trail: match.trail, stale: match.stale };
     return;
   }
@@ -208,6 +210,7 @@ async function* askStream(question) {
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "", seenTrail = false, seenStale = false, text = "";
+  let lastTrailSig = null, lastStaleSig = null;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -235,13 +238,22 @@ async function* askStream(question) {
       else if (msg.answer !== text) text += msg.answer;                 // delta
       yield { part: "answer", text: msg.answer, mode: text === msg.answer ? "replace" : "append" };
     }
+    /* trail[] and stale[] are SNAPSHOTS, not deltas. The server repeats the
+       full array in every frame, so appending per frame duplicates every chip
+       and every badge (verified against the real endpoint: 6 rows x 2 frames
+       rendered 12 chips). Always REPLACE with the latest snapshot, and only
+       when it actually changed, so we re-render once rather than per frame. */
     if (Array.isArray(msg.trail)) {
-      for (const row of msg.trail) { if (!seenTrail) { seenTrail = true; yield { part: "trail", row }; } else yield { part: "trail", row }; }
+      const sig = JSON.stringify(msg.trail);
+      if (sig !== lastTrailSig) { lastTrailSig = sig; seenTrail = true; yield { part: "trail", rows: msg.trail, replace: true }; }
     }
-    if (Array.isArray(msg.stale)) for (const row of msg.stale) { seenStale = true; yield { part: "stale", row }; }
+    if (Array.isArray(msg.stale)) {
+      const sig = JSON.stringify(msg.stale);
+      if (sig !== lastStaleSig) { lastStaleSig = sig; seenStale = true; yield { part: "stale", rows: msg.stale, replace: true }; }
+    }
   }
-  if (!seenTrail) yield { part: "trail", row: null };  // render the empty state
-  yield { part: "done", answer: text, trail: [], stale: seenStale ? [] : [] };
+  if (!seenTrail) yield { part: "trail", rows: [] };  // render the empty state
+  yield { part: "done", answer: text };
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -405,10 +417,14 @@ async function run(question) {
       if (ev.part === "answer") {
         setAnswer(ev.mode === "replace" ? ev.text : currentText + ev.text, true);
       } else if (ev.part === "trail") {
-        if (ev.row) seen.push(ev.row);
+        /* replace=true  -> real mode, the array is a full snapshot; swap it.
+           replace=false -> mock mode, each event is one additive row. */
+        if (ev.replace) seen.length = 0;
+        seen.push(...(ev.rows || []));
         renderTrail(seen);
       } else if (ev.part === "stale") {
-        STALE.set(`${ev.row.type}|${ev.row.name}`, ev.row);
+        if (ev.replace) STALE.clear();
+        for (const row of (ev.rows || [])) STALE.set(`${row.type}|${row.name}`, row);
         renderTrail(seen);
       } else if (ev.part === "done") {
         setAnswer(ev.answer || currentText, false);
