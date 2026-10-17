@@ -46,6 +46,27 @@ load_dotenv()
 
 MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 
+# --------------------------------------------------------------------------
+# Provider selection
+#
+# Two ways to point this at FastRouter, because filling in a single field should
+# be enough — you should not also have to know to edit the base URL.
+#
+#   Preferred: set FASTROUTER_API_KEY below and leave everything else alone.
+#   Manual:    set ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL yourself.
+#
+# FASTROUTER_API_KEY wins when both are present, because it is the more specific
+# statement of intent. Note the bare host: the Anthropic SDK appends
+# /v1/messages itself, so .../api/v1 would become /api/v1/v1/messages and 404.
+# --------------------------------------------------------------------------
+_FASTROUTER_KEY = os.getenv("FASTROUTER_API_KEY", "").strip()
+_API_KEY = _FASTROUTER_KEY or os.getenv("ANTHROPIC_API_KEY", "")
+_BASE_URL = (
+    "https://api.fastrouter.ai"
+    if _FASTROUTER_KEY
+    else os.getenv("ANTHROPIC_BASE_URL")
+)
+
 # Response budget per round. Was hardcoded at 1024, which is fine on a healthy
 # balance and fatal on a thin one: OpenRouter rejects the whole request with
 # HTTP 402 when max_tokens exceeds what the remaining balance can cover, so the
@@ -417,12 +438,16 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 
 def _client() -> anthropic.Anthropic:
-    if not os.getenv("ANTHROPIC_API_KEY"):
+    if not _API_KEY:
         raise RuntimeError(
-            "ANTHROPIC_API_KEY is not set. Put it in .env (never commit .env) "
-            "and restart uvicorn -- a running server does not pick up .env edits."
+            "No model API key. Set FASTROUTER_API_KEY (free credits, no card) "
+            "or ANTHROPIC_API_KEY in .env — never commit .env — then restart "
+            "uvicorn, because a running server does not pick up .env edits."
         )
-    return anthropic.Anthropic()
+    kwargs: dict[str, Any] = {"api_key": _API_KEY}
+    if _BASE_URL:
+        kwargs["base_url"] = _BASE_URL
+    return anthropic.Anthropic(**kwargs)
 
 
 def run_agent(question: str) -> dict[str, Any]:
