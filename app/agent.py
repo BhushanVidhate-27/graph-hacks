@@ -7,8 +7,8 @@ exactly the part the judges ask about.
 
 The four rules this file implements (soham.md §6):
 
-  1. THE MODEL CHOOSES THE TOOL.  There is no hardcoded pipeline that runs all
-     three traversals and concatenates the output -- that is a search box with
+  1. THE MODEL CHOOSES THE TOOL.  There is no hardcoded pipeline that runs
+     every traversal and concatenates the output -- that is a search box with
      extra steps and it loses the track on multi-hop reasoning.  The tool
      *descriptions* are where routing quality lives (soham.md §7): if the model
      picks the wrong tool, fix the description, not the routing code.
@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Callable, Iterable
+from typing import Any, Callable
 
 import anthropic
 from dotenv import load_dotenv
@@ -56,7 +56,10 @@ SYSTEM_PROMPT = """You are Helio's company-brain assistant.
 
 You answer questions about a fictional fintech called Helio -- who owns what,
 who knows what, what breaks if a service goes down, and where a decision was
-made -- by calling tools that traverse a knowledge graph.
+made -- by calling tools that traverse a knowledge graph. The graph also records
+who is on call and on rotation, which team a person is in now (and whether they
+have left), a service's contracted SLA, which services nothing depends on, and
+decisions matched by keyword.
 
 NON-NEGOTIABLE RULES:
 
@@ -78,6 +81,13 @@ NON-NEGOTIABLE RULES:
 
 5. A question may have several parts. Chain the tool calls -- do not stop at the
    first one.
+
+6. Ownership is not contribution volume. Ask the ownership tool for an owner;
+   never infer one from who contributed most. A service can have no owner, and
+   that absence is the answer.
+
+7. A person may have left the company. Report a departure as a departure, and
+   prefer the current team or current owner over a historical one.
 
 Answer in short, plain sentences a busy engineer can act on."""
 
@@ -149,6 +159,102 @@ TOOLS: list[dict[str, Any]] = [
         ),
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "owner_of",
+        "description": (
+            "Which team owns this service. Use this for any 'who owns / who is "
+            "responsible for X' question. An unowned service returns no rows, and "
+            "that absence is the answer."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Exact service name, e.g. config-service.",
+                }
+            },
+            "required": ["service"],
+        },
+    },
+    {
+        "name": "decisions_about",
+        "description": (
+            "Decisions whose summary mentions a keyword, newest first. Use this "
+            "when the question names a topic (e.g. 'pricing', 'SLA') rather than a "
+            "project name."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "description": "A word expected in the decision summary, e.g. pricing.",
+                }
+            },
+            "required": ["keyword"],
+        },
+    },
+    {
+        "name": "zero_dependents",
+        "description": (
+            "Services that nothing else depends on. Use this for 'which services "
+            "are safe to change / have no dependents'."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "sla_of",
+        "description": (
+            "The contracted SLA for a service. Returns no rows when none is "
+            "recorded -- do not assume one exists."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Exact service name, e.g. dispute-service.",
+                }
+            },
+            "required": ["service"],
+        },
+    },
+    {
+        "name": "current_team",
+        "description": (
+            "The team a person is in right now, and any team they have left. Use "
+            "this for 'who works on X now' or to check whether someone is still "
+            "with the company."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "person": {
+                    "type": "string",
+                    "description": "Full person name, e.g. Priya Sharma.",
+                }
+            },
+            "required": ["person"],
+        },
+    },
+    {
+        "name": "on_call",
+        "description": (
+            "Who is on call for a team this week, and who is on the rotation but "
+            "not on call. Use this for 'who gets paged'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "team": {
+                    "type": "string",
+                    "description": "Exact team name, e.g. Ledger.",
+                }
+            },
+            "required": ["team"],
+        },
+    },
 ]
 
 
@@ -169,14 +275,10 @@ def _load_graph_module():
     return graph
 
 
-# Map tool name -> the graph.py function name.  Kept explicit so the wiring is
-# obvious; there is no getattr-by-string indirection to debug.
-GRAPH_FUNCTIONS: dict[str, str] = {
-    "blast_radius": "blast_radius",
-    "expertise": "expertise",
-    "provenance": "provenance",
-    "staleness": "staleness",
-}
+# Dispatch goes through graph.TOOLS -- the dict app/graph.py publishes as
+# name -> function.  Reading it directly (rather than a second hand-kept map)
+# means the tool name the model chose and the function that runs cannot drift
+# apart when either side adds a traversal.
 
 
 def _normalise(raw: Any) -> dict[str, list[dict[str, Any]]]:
@@ -208,11 +310,13 @@ def _normalise(raw: Any) -> dict[str, list[dict[str, Any]]]:
 
 def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """Run one graph traversal and return its rows plus its trail."""
-    if name not in GRAPH_FUNCTIONS:
-        raise ValueError(f"Unknown tool: {name}")
-
     graph = _load_graph_module()
-    fn: Callable[..., Any] = getattr(graph, GRAPH_FUNCTIONS[name])
+    fn: Callable[..., Any] | None = getattr(graph, "TOOLS", {}).get(name)
+    if fn is None:
+        raise ValueError(
+            f"Unknown tool {name!r}. app/graph.py publishes: "
+            f"{sorted(getattr(graph, 'TOOLS', {}))}"
+        )
     raw = fn(**arguments)
     return _normalise(raw)
 
@@ -243,7 +347,9 @@ def run_agent(question: str) -> dict[str, Any]:
 
     messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
     trail: list[dict[str, Any]] = []
-    stale: list[dict[str, Any]] = []
+    # Keyed by (type, name) so the same stale fact returned by two tools badges
+    # one chip instead of stacking a duplicate warning.
+    stale: dict[tuple[str, str], dict[str, Any]] = {}
 
     for _round in range(MAX_TOOL_ROUNDS):
         response = client.messages.create(
@@ -262,7 +368,7 @@ def run_agent(question: str) -> dict[str, Any]:
             answer = "".join(
                 block.text for block in response.content if block.type == "text"
             ).strip()
-            return {"answer": answer, "trail": trail, "stale": stale}
+            return {"answer": answer, "trail": trail, "stale": list(stale.values())}
 
         # The model chose one or more tools. Run them and hand the results back.
         tool_results: list[dict[str, Any]] = []
@@ -282,7 +388,8 @@ def run_agent(question: str) -> dict[str, Any]:
                     "empty": len(result["rows"]) == 0,
                 }
                 trail.extend(result["trail"])
-                stale.extend(_extract_stale(result["trail"]))
+                for item in extract_stale(block.name, result["rows"]):
+                    stale[(item["type"], item["name"])] = item
             except Exception as exc:  # noqa: BLE001 - surfaced to the model on purpose
                 is_error = True
                 payload = {"error": f"{type(exc).__name__}: {exc}"}
@@ -305,30 +412,64 @@ def run_agent(question: str) -> dict[str, Any]:
             "this run allows. Tell me which part to narrow down."
         ),
         "trail": trail,
-        "stale": stale,
+        "stale": list(stale.values()),
     }
 
 
-def _extract_stale(trail: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Pull stale markers out of trail rows.
+def extract_stale(tool_name: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Lift stale facts out of a tool's ROWS into the frozen stale[] shape.
 
-    A row is stale when it carries `stale: true` or a `last_verified_at` older
-    than 90 days.  graph.py owns the real staleness query; this only lifts what
-    the rows already carry so main.py can send a populated `stale[]`.
+    This reads the tool's `rows`, NOT its `trail`.  app/graph.py projects rows
+    into the trail with `_trail()`, which keeps only type/name/detail/date/
+    via_edge and deliberately drops `stale` and `last_verified_at` -- so reading
+    the trail would leave stale[] permanently empty.  The markers live on rows:
+
+      staleness  -> every row is stale; the query filters on last_verified_at.
+      expertise  -> a row is stale when the person's last touch is old.
+      provenance -> a row is stale when it is a superseded decision.
+
+    Contract (mock/trail.json): stale[] = [{type, name, reason, last_verified_at}].
     """
-    out: list[dict[str, Any]] = []
-    for row in trail:
-        if not row.get("stale"):
-            continue
-        out.append(
+    if tool_name == "staleness":
+        return [
             {
                 "type": row.get("type", ""),
                 "name": row.get("name", ""),
                 "reason": row.get("reason", "not verified in over 90 days"),
                 "last_verified_at": row.get("last_verified_at", ""),
             }
-        )
-    return out
+            for row in rows
+        ]
+
+    if tool_name == "expertise":
+        return [
+            {
+                "type": "Person",
+                "name": row.get("person", ""),
+                "reason": row.get("detail", ""),
+                "last_verified_at": row.get("latest", ""),
+            }
+            for row in rows
+            if row.get("stale")
+        ]
+
+    if tool_name == "provenance":
+        # Only a decision the graph marks superseded is stale.  Do NOT test the
+        # row's `superseded_by` key: in app/graph.py that holds the decision this
+        # one supersedes (the naming is inverted), so it is truthy on the CURRENT
+        # decision -- D-19 -- and would badge the active answer as out of date.
+        return [
+            {
+                "type": "Decision",
+                "name": row.get("id", ""),
+                "reason": row.get("detail", ""),
+                "last_verified_at": row.get("date", ""),
+            }
+            for row in rows
+            if row.get("status") == "superseded"
+        ]
+
+    return []
 
 
 if __name__ == "__main__":  # quick manual check: python -m app.agent "question"
