@@ -295,25 +295,26 @@ def gen_people():
 @lru_cache(maxsize=None)
 def gen_person_team():
     rows = []
+    seen = set()
+
+    def add(person, team, role, since, valid_to):
+        # One row per (person, team). The loader MERGEs edges, so a duplicate row
+        # silently collapses and the CSV count stops matching the graph count —
+        # which is how 107 CSV rows became 100 edges.
+        key = (person, team)
+        if key in seen:
+            return
+        seen.add(key)
+        rows.append([person, team, role, since, valid_to])
+
     for name, spec in LOAD_BEARING.items():
         if spec["team"]:
-            since = "2024-01-15"
-            valid_to = spec.get("left", "")
-            rows.append([name, spec["team"], "member", since, valid_to])
-    used = {(r[0]) for r in rows}
-    pool = {t: [] for t in TEAMS}
-    for n, spec in LOAD_BEARING.items():
-        if spec["team"]:
-            pool[spec["team"]].append(n)
-    fillers = [r[0] for r in gen_people() if r[0] not in used]
+            add(name, spec["team"], "member", "2024-01-15", spec.get("left", ""))
+
+    assigned = {n for n, spec in LOAD_BEARING.items() if spec["team"]}
+    fillers = [r[0] for r in gen_people() if r[0] not in assigned]
     for n in fillers:
-        t = random.choice(list(TEAMS))
-        pool[t].append(n)
-    for t, names in pool.items():
-        for n in names:
-            if len(rows) >= 110:
-                break
-            rows.append([n, t, "member", "2024-01-15", ""])
+        add(n, random.choice(list(TEAMS)), "member", "2024-01-15", "")
     return rows
 
 
@@ -668,7 +669,7 @@ def main():
     write_csv("contributions.csv",
               ["person", "project", "role", "commits", "last_touch", "last_verified_at"],
               gen_contributions())
-    write_csv("rotations.csv", ["team", "member", "week_start"], gen_rotations())
+    write_csv("rotations.csv", ["team", "member", "since"], gen_rotations())
     write_csv("on_call.csv", ["member", "team", "week_start", "week_end"], gen_on_call())
     write_csv("documents.csv",
               ["name", "kind", "date", "author", "project", "last_verified_at"], gen_documents())

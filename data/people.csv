@@ -1,0 +1,101 @@
+name,email,title,seniority,is_member
+Elena Vasquez,elena.vasquez@helio.example,Chief Technology Officer,executive,0
+Ravi Menon,ravi.menon@helio.example,Staff Engineer,staff,1
+Priya Sharma,priya.sharma@helio.example,Senior Engineer,senior,0
+Ana Duarte,ana.duarte@helio.example,Engineering Lead,lead,0
+Diego Alvarez,diego.alvarez@helio.example,Senior Engineer,senior,1
+Aisha Khan,aisha.khan@helio.example,Product Manager,mid,0
+Tomas Berg,tomas.berg@helio.example,Engineer,mid,1
+Mei Lin,mei.lin@helio.example,Engineer,mid,1
+Justin Beck,ckelley@example.org,Chief Technology Officer,mid,0
+Tiffany Fox,brian00@example.net,Town planner,lead,0
+Heather Foster,jordanrobert@example.org,"Restaurant manager, fast food",lead,0
+Mary Johnson,angelaedwards@example.org,"Copywriter, advertising",staff,0
+Scott Ryan,barronkathleen@example.com,Product manager,lead,0
+Dustin Taylor,moorekevin@example.com,Clinical psychologist,senior,0
+Kyle Burton,morrischristopher@example.org,Stage manager,staff,0
+Ana Espinoza,flynndavid@example.net,Commercial art gallery manager,mid,0
+Emily Wright,scott28@example.net,"Therapist, speech and language",junior,0
+Garrett Weiss,hayesnicole@example.com,Podiatrist,lead,0
+Taylor Frazier,hannah61@example.com,Operations geologist,lead,0
+Joseph Rice,melaniesanchez@example.com,Maintenance engineer,mid,0
+Jason Rush,alisonallen@example.org,Waste management officer,lead,0
+Crystal White,sharon37@example.org,"Engineer, building services",senior,0
+Miguel Watts,ypreston@example.net,Agricultural consultant,junior,0
+Tim Serrano,jared16@example.net,"Engineer, biomedical",mid,0
+Wendy Powers,melissawilliams@example.org,"Copywriter, advertising",junior,0
+Christopher Baker,rebecca57@example.net,"Teacher, adult education",junior,0
+David Burnett,peter26@example.net,Dancer,lead,0
+Jasmine Macdonald,nicole47@example.net,Chiropractor,staff,0
+William Crawford,lawrencekevin@example.org,Applications developer,senior,0
+Caitlyn Rodriguez,hansonmaureen@example.org,"Buyer, retail",lead,0
+Matthew Thompson,michael87@example.org,Exercise physiologist,staff,0
+Monica King,tammy56@example.com,Actor,senior,0
+Brandon Haney,cmunoz@example.org,"Nurse, mental health",lead,0
+Scott Gonzalez,cruzsarah@example.com,Biomedical scientist,staff,0
+Jennifer Abbott,joshuamcfarland@example.com,Corporate treasurer,staff,0
+Diana Thompson,rhenderson@example.org,"Engineer, mining",junior,0
+Gloria Wolf,aliciagriffith@example.net,Financial trader,staff,0
+Alejandro Ho,khanson@example.net,"Horticulturist, amenity",staff,0
+Karen Edwards,stephanie15@example.org,Art therapist,senior,0
+Harold Maldonado,hhernandez@example.net,"Embryologist, clinical",junior,0
+Shawn Johnson,davidstrickland@example.com,Community development worker,lead,0
+Tommy Gregory,elizabethturner@example.com,"Embryologist, clinical",lead,0
+Hector Castillo,steven07@example.com,Amenity horticulturist,mid,0
+Zachary Patel,natalie77@example.com,Diplomatic Services operational officer,junior,0
+Ethan Carter,prestonharris@example.com,Herpetologist,staff,0
+Richard Jackson,pfisher@example.net,Higher education lecturer,mid,0
+Amy Martin,nbaker@example.com,Public house manager,lead,0
+Kristen Aguilar,mitchellanderson@example.net,"Programme researcher, broadcasting/film/video",lead,0
+Kenneth Allen,williamriley@example.org,Chiropodist,senior,0
+Mark Harris,mnelson@example.com,Bonds trader,mid,0
+Kelly Sawyer,smithmichael@example.net,Chartered management accountant,mid,0
+Danny Kramer,hollyballard@example.com,Commercial/residential surveyor,senior,0
+Christine Doyle,stephanie25@example.com,Web designer,lead,0
+Marcia Edwards,valerie59@example.net,Electrical engineer,lead,0
+Amanda Brown,mlewis@example.com,"Education officer, environmental",mid,0
+Beth Holmes,johnsonjeffrey@example.com,Health promotion specialist,junior,0
+Kelly Wallace,christinacohen@example.org,"Investment banker, corporate",staff,0
+Marcus Gutierrez,shannonkara@example.net,Industrial buyer,staff,0
+Mrs. Andrea Wood,sduran@example.net,Catering manager,staff,0
+Joseph Hernandez,cynthiastokes@example.org,Teaching laboratory technician,junior,0
+Ruth Carson,amanda72@example.com,Editorial assistant,senior,0
+Mallory Shaw,ochambers@example.net,Financial trader,mid,0
+Dustin Kennedy,qanthony@example.net,Sport and exercise psychologist,junior,0
+Julie Torres,ymalone@example.net,Health physicist,mid,0
+Robert Johnson,fpatterson@example.net,Civil Service administrator,senior,0
+Robert Wu,lawrence85@example.net,Office manager,senior,0
+Desiree Greene,paula66@example.net,Advertising copywriter,junior,0
+Keith Bridges,mcclurejohn@example.com,"Buyer, retail",staff,0
+Hannah Gibson,amanda39@example.net,Field trials officer,senior,0
+Kristin Robinson,daniel35@example.net,Osteopath,lead,0
+Jeffrey Fox DVM,webermarie@example.org,"Designer, fashion/clothing",lead,0
+Andrew Palmer,onelson@example.org,Chartered certified accountant,junior,0
+Crystal Montes,dave92@example.org,"Engineer, civil (consulting)",junior,0
+Amanda Haas,robertryan@example.org,"Surveyor, rural practice",senior,0
+Ashley Williams,andrewthompson@example.net,"Scientist, water quality",junior,0
+Amber Carter,karinajohnson@example.net,Systems analyst,senior,0
+John Pierce,gramos@example.com,Naval architect,junior,0
+Shelly Horn,xmarshall@example.org,Brewing technologist,lead,0
+Nathan Hernandez,yvette41@example.net,Higher education lecturer,junior,0
+Julie Moore,christinalawrence@example.net,Fast food restaurant manager,staff,0
+Laura Stevenson,waderose@example.net,"Clinical scientist, histocompatibility and immunogenetics",junior,0
+Dawn Garcia,deborah54@example.net,Heritage manager,mid,0
+Karen Hayes,shane23@example.org,Research scientist (maths),staff,0
+Tiffany Jackson,amber78@example.com,Web designer,lead,0
+Jenna Moore,maryhicks@example.org,Chartered legal executive (England and Wales),junior,0
+Jeffrey Le,btodd@example.com,Control and instrumentation engineer,mid,0
+Troy Newman,kfuentes@example.org,Social worker,senior,0
+Whitney Fischer,phuber@example.net,Chief Executive Officer,lead,0
+William Greene,stevenbenitez@example.net,"Designer, industrial/product",mid,0
+Jordan Wiley,msanchez@example.net,"Engineer, land",senior,0
+Nicole Wolfe,clarkchristopher@example.net,Glass blower/designer,senior,0
+Alexander Rodriguez,davidhall@example.net,Agricultural engineer,staff,0
+Dawn Howard,dgardner@example.net,Higher education lecturer,junior,0
+Brandon Wheeler,milleranthony@example.com,Corporate investment banker,mid,0
+Michael Dixon,fernandezerica@example.com,Primary school teacher,lead,0
+Charles Allen,adamsmith@example.org,"Sales professional, IT",lead,0
+Patricia Flynn,vaughncynthia@example.net,"Geneticist, molecular",staff,0
+Amy Harvey,lynchjodi@example.com,Call centre manager,lead,0
+Alison Woods,awilson@example.net,Broadcast engineer,senior,0
+Leslie Stewart,catherinecline@example.com,Clinical molecular geneticist,mid,0
