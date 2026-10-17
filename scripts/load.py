@@ -41,8 +41,27 @@ DATA = os.path.join(ROOT, "data")
 GRAPH = os.getenv("FALKORDB_GRAPH", "helio")
 HOST = os.getenv("FALKORDB_HOST", "localhost")
 PORT = int(os.getenv("FALKORDB_PORT", "6379"))
+USERNAME = os.getenv("FALKORDB_USERNAME", "")
+PASSWORD = os.getenv("FALKORDB_PASSWORD", "")
+SSL = os.getenv("FALKORDB_SSL", "").strip().lower() in ("1", "true", "yes", "on")
 
 BATCH = 500
+
+
+def connect():
+    """Local Docker by default; FalkorDB Cloud when FALKORDB_SSL is set.
+
+    Cloud refuses plain TCP, uses a non-default port, and requires credentials.
+    All three come from env so one code path serves both.
+    """
+    kwargs = {"host": HOST, "port": PORT}
+    if SSL:
+        kwargs["ssl"] = True
+    if USERNAME:
+        kwargs["username"] = USERNAME
+    if PASSWORD:
+        kwargs["password"] = PASSWORD
+    return FalkorDB(**kwargs)
 
 FAILURES: list[str] = []
 
@@ -69,8 +88,9 @@ def to_int(v, default=None):
 
 
 def main():
-    db = FalkorDB(host=HOST, port=PORT)
+    db = connect()
     g = db.select_graph(GRAPH)
+    print(f"Connecting to {HOST}:{PORT} (ssl={SSL}, auth={bool(USERNAME)})...")
 
     t0 = time.time()
 
