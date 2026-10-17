@@ -85,3 +85,42 @@ def test_cors_allows_both_vite_origins(client, origin):
     )
     assert res.status_code == 200
     assert res.headers["access-control-allow-origin"] == origin
+
+
+# --------------------------------------------------------------------------- #
+# A backend failure must still be a well-formed stream, not a dropped socket.
+# --------------------------------------------------------------------------- #
+
+def test_backend_failure_yields_an_error_frame_then_done(client, monkeypatch):
+    def boom(_question):
+        raise RuntimeError("ANTHROPIC_API_KEY is not set. Put it in .env")
+
+    monkeypatch.setattr(main, "answer_question", boom)
+
+    # Must NOT raise: the status is already committed to 200, so an escaping
+    # exception is what produces the stuck spinner on the client.
+    res = client.post("/ask", json={"question": "who owns payments-gateway?"})
+    assert res.status_code == 200
+
+    frames = _frames(res.text)
+    assert frames[-1] == "[DONE]", "the client needs the sentinel even on failure"
+
+    payload = json.loads(frames[-2])
+    assert set(payload) == {"answer", "trail", "stale"}
+    assert payload["trail"] == [] and payload["stale"] == []
+    assert "ANTHROPIC_API_KEY" in payload["answer"]
+    assert "could not answer" in payload["answer"]
+
+
+def test_unexpected_backend_failure_still_streams_a_frame(client, monkeypatch):
+    monkeypatch.setattr(
+        main, "answer_question",
+        lambda _q: (_ for _ in ()).throw(ValueError("graph returned garbage")),
+    )
+
+    res = client.post("/ask", json={"question": "anything"})
+    frames = _frames(res.text)
+    assert frames[-1] == "[DONE]"
+    payload = json.loads(frames[-2])
+    assert "ValueError" in payload["answer"]
+    assert payload["trail"] == [] and payload["stale"] == []
