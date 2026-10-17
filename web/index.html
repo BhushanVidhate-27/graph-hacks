@@ -109,6 +109,15 @@
   .standalonestale .r{color:var(--ink-2);font-size:12px}
   .err{background:#3a1a1a;border:1px solid #f85149;border-radius:var(--radius);padding:12px 14px;color:#ffb3ad;font-size:13px}
 
+  /* Contract drift. Hidden entirely when the incoming trail matches the frozen
+     shape, so a healthy demo is pixel-identical to before. */
+  #contractwarn{
+    display:block;background:var(--warn-bg);border:1px solid var(--warn);
+    border-radius:var(--radius);padding:8px 12px;margin:0 0 14px;
+    color:var(--warn);font-size:12px;
+  }
+  #contractwarn[hidden]{display:none}
+
   .errbar{
     background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);
     padding:8px 12px;margin-bottom:20px;font-size:12px;color:var(--ink-3);
@@ -145,6 +154,8 @@
   <div class="answer" id="answer">
     <span class="placeholder">Ask a multi-hop question. The answer will show its path.</span>
   </div>
+
+  <div id="contractwarn" hidden></div>
 
   <div class="trailwrap" id="trailwrap" hidden>
     <h2>Provenance trail</h2>
@@ -293,8 +304,57 @@ function pickCase(fixture, question) {
    Without the edge labels this is a list of things that happened to be near
    each other. With them it is a proof chain — which is the thesis of the entry.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+/* SCHEMA.md: via_edge is a CLOSED vocabulary, and the note on it is blunt —
+   "an unexpected value renders wrong with nobody noticing until Gate 2".
+   That is the same class of failure as the duplicated-trail bug, so the trail
+   is checked against the contract on every render instead of being trusted.
+
+   Deliberately invisible when the data is healthy: this must never put a
+   warning on screen during the demo. It only becomes visible when the incoming
+   rows actually violate the contract. */
+const VIA_EDGE_VOCABULARY = new Set([
+  "CONTRIBUTED_TO", "OWNED_BY", "EVIDENCED_BY", "SUPERSEDES", "MENTIONS",
+  "HAS_DEPENDENT", "DEPENDS_ON", "MEMBER_OF", "ON_CALL", "USES",
+  "HAS_ROTATION", "REPORTS_TO", "ABOUT", "AUTHORED_BY",
+]);
+const TRAIL_REQUIRED = ["type", "name", "detail", "date", "via_edge"];
+const STALE_REQUIRED = ["type", "name", "reason", "last_verified_at"];
+let contractIssues = [];
+
+function checkTrailContract(rows, stale) {
+  const issues = [];
+  (rows || []).forEach((r, i) => {
+    TRAIL_REQUIRED.forEach((k) => {
+      if (!(k in r)) issues.push(`trail[${i}] (${r.name || "?"}) missing "${k}"`);
+    });
+    // index 0 is the chain start, so its via_edge legitimately carries nothing
+    if (i > 0 && r.via_edge && !VIA_EDGE_VOCABULARY.has(r.via_edge)) {
+      issues.push(`trail[${i}] (${r.name || "?"}) unknown via_edge "${r.via_edge}"`);
+    }
+  });
+  (stale || []).forEach((s, i) => {
+    STALE_REQUIRED.forEach((k) => {
+      if (!(k in s)) issues.push(`stale[${i}] (${s.name || "?"}) missing "${k}"`);
+    });
+  });
+  contractIssues = issues;
+  if (issues.length) {
+    console.warn("[contract] trail does not match the frozen shape:", issues);
+  }
+  return issues;
+}
+
 function renderTrail(rows) {
   const host = $("#trail"); host.textContent = "";
+  const issues = checkTrailContract(rows, [...STALE.values()]);
+  const marker = $("#contractwarn"); marker.textContent = "";
+  if (issues.length) {
+    marker.hidden = false;
+    marker.textContent = `⚠ Contract drift: ${issues.length} field(s) off-shape — see console.`;
+  } else {
+    marker.hidden = true;
+  }
   if (!rows || rows.length === 0) { renderEmptyState(); return; }
   $("#trailwrap").hidden = false;
   host.style.display = "flex";
@@ -406,6 +466,8 @@ function setAnswer(text, streaming) {
 async function run(question) {
   const btn = $("#go"); btn.disabled = true;
   STALE.clear();
+  contractIssues = [];
+  $("#contractwarn").hidden = true;
   $("#trailwrap").hidden = true;
   $("#trail").textContent = "";
   $("#standalonestale").textContent = "";
