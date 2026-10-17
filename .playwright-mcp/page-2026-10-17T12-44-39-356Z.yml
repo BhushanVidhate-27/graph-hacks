@@ -1,0 +1,27 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - heading "Helio · Company Brain" [level=1] [ref=e4]
+    - paragraph [ref=e5]: "Graph traversal, not text search. Source: mock fixture (offline)"
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - text: "Frontend owner: Ujwal ·"
+      - code [ref=e8]: web/
+      - text: +
+      - code [ref=e9]: mock/
+      - text: · one
+      - code [ref=e10]: fetch()
+      - text: call site
+    - generic [ref=e11]:
+      - text: MOCK MODE — one-line switch in
+      - code [ref=e12]: ENDPOINT
+  - generic [ref=e13]:
+    - textbox "Who knows about the payments service, what breaks if it goes down, and where was that decided?" [ref=e14]
+    - button "Ask" [ref=e15] [cursor=pointer]
+    - button "Random" [ref=e16] [cursor=pointer]
+  - generic [ref=e17]:
+    - generic [ref=e18]: "demo beats:"
+    - button "demo" [ref=e19] [cursor=pointer]
+    - button "failure" [ref=e20] [cursor=pointer]
+    - button "stale ranking" [ref=e21] [cursor=pointer]
+    - button "blast radius" [ref=e22] [cursor=pointer]
+  - generic [ref=e23]: Ask a multi-hop question. The answer will show its path.

@@ -24,5 +24,13 @@ registered by app.main.
 from app.main import app
 from fastapi.staticfiles import StaticFiles
 
-# /health must answer even if web/ is missing, so the mount failure is contained.
+# /health must answer even if a static mount fails, so mount failures stay
+# contained.
+#
+# mock/ is mounted SEPARATELY and at the root. The frontend loads its fixture at
+# "../mock/trail.json", which resolves to /mock/trail.json — not under /web/.
+# Mounting only web/ made that a silent 404 with a blank trail, which reads as a
+# broken renderer rather than a missing mount. It is mounted before "/" because
+# StaticFiles matches in registration order and the catch-all would swallow it.
+app.mount("/mock", StaticFiles(directory="mock"), name="mock")
 app.mount("/", StaticFiles(directory="web", html=True), name="web")
