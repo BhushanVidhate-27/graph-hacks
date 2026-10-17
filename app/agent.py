@@ -57,36 +57,85 @@ MAX_TOKENS = int(os.getenv("ANTHROPIC_MAX_TOKENS", "1024"))
 # Transient failures that deserve a retry rather than a dead stream. 429 and 5xx
 # are obvious; OpenRouter's in-flight budget also surfaces as 402 with
 # Retry-After, which reads like a permanent billing failure but is not.
-_RETRY_STATUS = {402, 408, 409, 425, 429, 500, 502, 503, 504, 529}
+#
+# 401 is included because OpenRouter returns it for FREE models that are merely
+# rate-limited ("User not found"), not just for bad credentials. Verified: the
+# same model answered three consecutive calls correctly and only started 401ing
+# during a 20-question sweep. Retrying a genuinely wrong key costs one extra
+# round trip and still raises the real error.
+_RETRY_STATUS = {401, 402, 408, 409, 425, 429, 500, 502, 503, 504, 529}
+
+# Model failover. ANTHROPIC_MODEL is tried first; if it keeps failing, each entry
+# here is tried in turn. Motivation: free OpenRouter models are free but rate-
+# limited hard, so a live demo can lose its answer to a busy provider rather
+# than to anything wrong with the app. Naming two or three free models gives the
+# demo something to fail over to at no cost.
+#
+# Note OpenAI itself has no free tier - if you want strictly $0, the fallbacks
+# must also be ":free" OpenRouter slugs.
+FALLBACK_MODELS = [
+    m.strip()
+    for m in os.getenv(
+        "ANTHROPIC_FALLBACK_MODELS",
+        # Default chain: free OpenRouter slugs, strongest first, so a
+        # rate-limited or empty-balance primary has somewhere free to fail over
+        # to. These are the ones actually VERIFIED to drive the tool-use loop to a
+        # correct must-fail answer against this graph — not every ":free" slug
+        # supports the loop. Tested and rejected: gemma-4-26b/31b (rate limited
+        # on sight), nemotron-ultra-550b and nano-omni (TypeError on the tool
+        # response shape), nemotron-3.5-lightning (empty body). gpt-oss and
+        # Sarvam are FastRouter slugs and 404 on OpenRouter.
+        "nvidia/nemotron-3-super-120b-a12b:free,"
+        "nvidia/nemotron-3.5-super-vl:free,"
+        "google/gemma-4-31b-it:free",
+    ).split(",")
+    if m.strip()
+]
+
+
+def _model_chain() -> list[str]:
+    """Primary model first, then fallbacks, de-duplicated, order preserved."""
+    seen, chain = set(), []
+    for m in [MODEL, *FALLBACK_MODELS]:
+        if m and m not in seen:
+            seen.add(m)
+            chain.append(m)
+    return chain
 
 
 def _create_with_retry(client: Any, *, attempts: int = 4, **kwargs: Any) -> Any:
     """Call client.messages.create, retrying transient failures with backoff.
 
-    Honours Retry-After when the provider sends one, otherwise backs off
-    exponentially. Gives up on anything that is not transient, so a genuine
-    missing key still fails fast with a useful message.
+    Walks ANTHROPIC_FALLBACK_MODELS if the primary model keeps failing, so a
+    rate-limited free model does not become a dead answer. Honours Retry-After
+    when the provider sends one, otherwise backs off exponentially. Gives up on
+    anything that is not transient, so a genuine missing key still fails fast
+    with a useful message.
     """
     import time
 
+    chain = _model_chain()
     last: Exception | None = None
-    for attempt in range(attempts):
-        try:
-            return client.messages.create(**kwargs)
-        except Exception as exc:  # noqa: BLE001 - re-raised below if not transient
-            status = getattr(exc, "status_code", None)
-            if status not in _RETRY_STATUS or attempt == attempts - 1:
-                raise
-            last = exc
-            delay = 2.0 * (attempt + 1)
-            headers = getattr(getattr(exc, "response", None), "headers", None)
-            if headers:
-                try:
-                    delay = max(delay, float(headers.get("Retry-After", delay)))
-                except (TypeError, ValueError):
-                    pass
-            time.sleep(min(delay, 20.0))
-    raise last  # pragma: no cover - loop always returns or raises
+
+    for model in chain:
+        for attempt in range(attempts):
+            try:
+                return client.messages.create(model=model, **kwargs)
+            except Exception as exc:  # noqa: BLE001 - re-raised below if not transient
+                status = getattr(exc, "status_code", None)
+                if status not in _RETRY_STATUS or attempt == attempts - 1:
+                    last = exc
+                    break  # this model is done; try the next one
+                delay = 2.0 * (attempt + 1)
+                headers = getattr(getattr(exc, "response", None), "headers", None)
+                if headers:
+                    try:
+                        delay = max(delay, float(headers.get("Retry-After", delay)))
+                    except (TypeError, ValueError):
+                        pass
+                time.sleep(min(delay, 20.0))
+
+    raise last if last else RuntimeError("no model available")
 
 # How many tool-use round trips we allow before we force a final answer.
 # The compound demo question ("who knows about payments AND what breaks if it
@@ -396,7 +445,8 @@ def run_agent(question: str) -> dict[str, Any]:
     for _round in range(MAX_TOOL_ROUNDS):
         response = _create_with_retry(
             client,
-            model=MODEL,
+            # model comes from _model_chain() inside the wrapper, so it can fail
+            # over. Passing it here too would be a duplicate kwarg.
             max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
             tools=TOOLS,
