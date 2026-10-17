@@ -467,9 +467,14 @@ def zero_dependents() -> dict[str, Any]:
             "count": len(names)}
 
 
+# week_start lives on the ON_CALL EDGE -- scripts/load.py stamps it there with
+# SET o.week_start = ... . Reading m.on_call_week (a Person NODE property) returned
+# None for every on-call person, so on_call() reported week_start=None and put a
+# null `date` into the trail, which fails Answer.model_validate on the real path
+# (the frozen contract says trail[].date is a str on every row). Bind the edge.
 ON_CALL = """
-MATCH (t:Team {name: $team})<-[:ON_CALL]-(m:Person:Member)
-RETURN m.name AS on_call, m.on_call_week AS week_start
+MATCH (t:Team {name: $team})<-[oc:ON_CALL]-(m:Person:Member)
+RETURN m.name AS on_call, oc.week_start AS week_start
 """
 
 ROTATION = """
