@@ -1,7 +1,22 @@
-.venv/
-.env
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets — never commit these (the deploy uses them)
+.env
+.env.*
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS noise (.DS_Store is already in the repo history; this stops new ones)
 .DS_Store
-node_modules/
-data/*.csv
+Thumbs.db
