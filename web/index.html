@@ -34,6 +34,12 @@
     font:inherit;font-weight:600;cursor:pointer;
   }
   .ask button:disabled{opacity:.5;cursor:not-allowed}
+  /* Secondary, so "Random" never reads as a second primary action next to Ask. */
+  .ask button#dice{
+    background:transparent;color:var(--ink-3);border:1px solid var(--line);
+    padding:12px 14px;font-weight:500;white-space:nowrap;
+  }
+  .ask button#dice:hover{color:var(--ink);border-color:var(--ink-3)}
 
   .cases{margin:-8px 0 20px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
   .cases .lbl{color:var(--ink-3);font-size:12px;margin-right:4px}
@@ -147,6 +153,7 @@
   <form class="ask" id="askform">
     <input id="q" autocomplete="off" placeholder="Who knows about the payments service, what breaks if it goes down, and where was that decided?" />
     <button id="go" type="submit">Ask</button>
+    <button id="dice" type="button" title="Fill the box with a random question (does not send it)">Random</button>
   </form>
 
   <div class="cases" id="cases"></div>
@@ -504,6 +511,34 @@ async function run(question) {
 }
 
 $("#askform").addEventListener("submit", (e) => { e.preventDefault(); run($("#q").value); });
+
+/* Dev helper: fills the input with a random question and stops there.
+   Deliberately does NOT submit — for recording, you want to type the question
+   yourself so the demo looks like a person asking, not a button being pressed.
+   Mixed on purpose: three must-fail questions that have NO answer in the graph
+   (config-service has no owner, checkout never decided pricing, dispute-service
+   has no SLA), because those are the ones worth rehearsing and the ones that
+   expose fabrication. */
+const RANDOM_QUESTIONS = [
+  "Who knows about the payments service?",
+  "What breaks if payments-gateway goes down?",
+  "Who should I ask about the payments service?",
+  "Where was the payments migration decided?",
+  "Is D-14 still the current decision?",
+  "Which service has zero dependents?",
+  "Who is on call for Ledger this week?",
+  "Who has worked on both payments and ledger?",
+  "Who owns config-service?",
+  "What did checkout decide about pricing?",
+  "What is the SLA for dispute-service?",
+  "What team is Aisha Khan on now?"
+];
+$("#dice").addEventListener("click", () => {
+  const input = $("#q");
+  input.value = RANDOM_QUESTIONS[Math.floor(Math.random() * RANDOM_QUESTIONS.length)];
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+});
 
 /* Mock-mode case picker. Lets the five demo beats be exercised without a
    backend. Hidden in real mode so it never ships. */
