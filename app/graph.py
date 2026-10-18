@@ -67,7 +67,15 @@ def _graph():
         kwargs["username"] = USERNAME
     if PASSWORD:
         kwargs["password"] = PASSWORD
-    return FalkorDB(**kwargs).select_graph(GRAPH)
+def db_health() -> bool:
+    """Return True if FalkorDB is reachable and responding."""
+    try:
+        g = _graph()
+        # Cheap query to verify connectivity
+        g.query("RETURN 1").result_set
+        return True
+    except Exception:
+        return False
 
 
 def resolve_service(name: str) -> tuple[str, bool]:
@@ -467,9 +475,14 @@ def zero_dependents() -> dict[str, Any]:
             "count": len(names)}
 
 
+# week_start lives on the ON_CALL EDGE -- scripts/load.py stamps it there with
+# SET o.week_start = ... . Reading m.on_call_week (a Person NODE property) returned
+# None for every on-call person, so on_call() reported week_start=None and put a
+# null `date` into the trail, which fails Answer.model_validate on the real path
+# (the frozen contract says trail[].date is a str on every row). Bind the edge.
 ON_CALL = """
-MATCH (t:Team {name: $team})<-[:ON_CALL]-(m:Person:Member)
-RETURN m.name AS on_call, m.on_call_week AS week_start
+MATCH (t:Team {name: $team})<-[oc:ON_CALL]-(m:Person:Member)
+RETURN m.name AS on_call, oc.week_start AS week_start
 """
 
 ROTATION = """

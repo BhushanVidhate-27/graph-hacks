@@ -323,12 +323,22 @@ app.add_middleware(
 @app.get("/health")
 def health() -> dict[str, Any]:
     """Liveness + which branch we are on.  Bhushan's deploy hits this."""
+    if not USE_MOCK:
+        from app import graph
+        if not graph.db_health():
+            from fastapi import HTTPException
+            raise HTTPException(status_code=503, detail="database unavailable")
     return {"status": "ok", "mock": USE_MOCK}
 
 
 @app.post("/ask")
 def ask(req: Ask) -> StreamingResponse:
     """Frozen contract: POST /ask -> SSE stream of {answer, trail[], stale[]}."""
+    if not USE_MOCK:
+        from app import graph
+        if not graph.db_health():
+            from fastapi import HTTPException
+            raise HTTPException(status_code=503, detail="database unavailable")
     return StreamingResponse(
         stream_answer(req.question),
         media_type="text/event-stream",
