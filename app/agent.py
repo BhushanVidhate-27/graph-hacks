@@ -214,6 +214,35 @@ def _create_with_retry(
 # room for several sequential calls rather than stopping at the first.
 MAX_TOOL_ROUNDS = 6
 
+# How many rows of one tool's result go back to the MODEL.
+#
+# The context is a shared, metered resource, and one tool can fill it on its own:
+# staleness() returns 163 rows — measured at 25,985 characters, about 6,500 tokens
+# — which is most of the 8,000 tokens-per-minute the smaller fallback model
+# accepts for an ENTIRE request. Asked "which dependent has no contributor in 90
+# days?" the model did a reasonable thing and called staleness(), and the very
+# next request came back:
+#
+#     HTTP 413: Request too large for model `openai/gpt-oss-20b` ...
+#     on tokens per minute (TPM): Limit 8000, Requested 10756
+#
+# The question was answered not by the graph or by the model but by arithmetic on
+# the size of a tool result. Retrying cannot fix it — 413 is deterministic for a
+# given payload, and _RETRY_STATUS correctly does not list it.
+#
+# The rows are still all returned to the API and to the trail; this bounds only
+# what the model reads. Truncation is ALWAYS disclosed in the payload
+# (`truncated` + `total_row_count`), never silent: an undisclosed cut reads to
+# the model exactly like absence, and rule 3 exists to stop absence turning into
+# a confident invention. A question that needs row 41 should get an honest
+# "40 of 163" rather than an HTTP error.
+#
+# 40 is chosen against the graph, not guessed: the largest result any
+# ground-truth question needs is team_members() at 21 rows, and staleness() now
+# leads with the contradicted documents so the two rows that matter survive the
+# cut (see the ordering note in staleness()).
+MAX_ROWS_PER_TOOL_RESULT = 40
+
 SYSTEM_PROMPT = """You are Helio's company-brain assistant.
 
 You answer questions about a fictional fintech called Helio -- who owns what,
@@ -242,7 +271,10 @@ NON-NEGOTIABLE RULES:
    the recency and explain which one actually answers the question.
 
 4. If a document or decision has been superseded or looks out of date, say so
-   explicitly instead of silently preferring one source.
+   explicitly instead of silently preferring one source. When a stale document is
+   cited by a decision, name that decision: the citation is what makes the
+   staleness matter, and "the document is out of date" on its own leaves the
+   reader unable to tell which live decision it undercuts.
 
 5. A question may have several parts. Chain the tool calls -- do not stop at the
    first one.
@@ -253,6 +285,21 @@ NON-NEGOTIABLE RULES:
 
 7. A person may have left the company. Report a departure as a departure, and
    prefer the current team or current owner over a historical one.
+
+8. Owning a service and having the authority to decide about it are different
+   things. A team OWNS a service; a person is named as the author on the
+   Decision itself. "Who decides / who has authority / who signed off" is the
+   decision's author -- look it up on decisions_about or provenance, never infer
+   it from who owns the service.
+
+9. A question may refer to something without naming it -- "those services",
+   "them", "that document". If the graph makes one referent obvious, use it and
+   answer; refusing to answer when the data was right there is the same failure
+   as inventing it. But if nothing makes a referent obvious -- "which dependent"
+   names no service at all, and there is no earlier message to inherit one from
+   -- then say in one short line which service you need and stop. Do not pick a
+   target out of the air, and do not answer "I do not know": both are worse than
+   asking, because one invents and the other wastes the reader's time.
 
 Answer in short, plain sentences a busy engineer can act on."""
 
@@ -302,8 +349,10 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "provenance",
         "description": (
-            "Where a decision about this project was made, who made it, and whether "
-            "it has since been superseded."
+            "Where a decision about this project was made, who authored it, and "
+            "whether it has since been superseded. Use this for 'who decided / "
+            "who signed off / who had authority over' questions as well as for "
+            "the decision itself."
         ),
         "input_schema": {
             "type": "object",
@@ -327,9 +376,11 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "owner_of",
         "description": (
-            "Which team owns this service. Use this for any 'who owns / who is "
-            "responsible for X' question. An unowned service returns no rows, and "
-            "that absence is the answer."
+            "Which team owns this service, plus the decision that last handed "
+            "ownership to a named person. Use this for any 'who owns / who is "
+            "responsible for X' question -- quote the person in the handover if "
+            "there is one, not just the team. An unowned service returns no rows, "
+            "and that absence is the answer."
         ),
         "input_schema": {
             "type": "object",
@@ -343,11 +394,23 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "ownership_overview",
+        "description": (
+            "Every service in the graph with the team that owns it, marking the "
+            "ones nothing owns. Use this for whole-set questions: 'does every "
+            "service have an owner', 'which services are unowned'. Do not call "
+            "owner_of repeatedly to answer these."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "decisions_about",
         "description": (
-            "Decisions whose summary mentions a keyword, newest first. Use this "
-            "when the question names a topic (e.g. 'pricing', 'SLA') rather than a "
-            "project name."
+            "Decisions matching a keyword in the summary OR a decision id such as "
+            "D-14, newest first, each with its status (active or superseded), who "
+            "authored it, and any decision that replaced it. Use this when the "
+            "question names a topic (e.g. 'pricing', 'provider'), a decision id, "
+            "or asks who decided something or whether a decision still stands."
         ),
         "input_schema": {
             "type": "object",
@@ -418,6 +481,25 @@ TOOLS: list[dict[str, Any]] = [
                 }
             },
             "required": ["team"],
+        },
+    },
+    {
+        "name": "stale_dependents",
+        "description": (
+            "The services that depend on this one and have had nobody contribute "
+            "to them in over 90 days. Use this for 'which of its dependents has "
+            "gone quiet' rather than combining blast_radius with per-service "
+            "expertise calls yourself."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Exact service name, e.g. payments-gateway.",
+                }
+            },
+            "required": ["service"],
         },
     },
     # ------------------------------------------------------------------------
@@ -504,14 +586,16 @@ TOOLS: list[dict[str, Any]] = [
         "description": (
             "Documents (runbooks, ADRs, postmortems) matching a word, kind or "
             "project, each with how fresh it is and which decisions cite it. Use "
-            "for 'is there a doc / runbook about X' or 'find docs on X'."
+            "for 'is there a doc / runbook about X', 'find docs on X', and 'is "
+            "that document still accurate' -- pass the descriptive phrase the "
+            "person used if you have no exact filename."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "keyword": {
                     "type": "string",
-                    "description": "A word, kind or project name, e.g. runbook.",
+                    "description": "A word, phrase, kind or project name, e.g. runbook.",
                 }
             },
             "required": ["keyword"],
@@ -551,14 +635,23 @@ def _normalise(raw: Any) -> dict[str, list[dict[str, Any]]]:
     render a provenance trail whose chips are labelled with the edge that linked
     them.  We accept the tidy form and tolerate a plain row list while Bhushan's
     shape settles.
+
+    Any OTHER key the traversal returned is carried through untouched.  That is
+    not tidiness, it is load-bearing: `departed` (current_team), `unowned`
+    (ownership_overview) and `rotation_not_on_call` (on_call) sit beside `rows`
+    precisely because `rows` is empty in the case that matters. Rebuilding the
+    dict from just the two known keys silently deleted them, and the model then
+    reported "no data" about a fact it had been handed. See run_agent() for the
+    observed failure.
     """
     if raw is None:
         return {"rows": [], "trail": []}
 
     if isinstance(raw, dict):
-        rows = list(raw.get("rows") or [])
-        trail = list(raw.get("trail") or [])
-        return {"rows": rows, "trail": trail}
+        out = {k: v for k, v in raw.items() if k not in {"rows", "trail"}}
+        out["rows"] = list(raw.get("rows") or [])
+        out["trail"] = list(raw.get("trail") or [])
+        return out
 
     # A QueryResult from the falkordb driver: never iterate it, read result_set.
     result_set = getattr(raw, "result_set", None)
@@ -927,14 +1020,42 @@ def run_agent(question: str) -> dict[str, Any]:
             try:
                 result = call_tool(block.name, dict(block.input or {}))
                 is_error = False
-                payload: Any = {
-                    "rows": result["rows"],
-                    "row_count": len(result["rows"]),
-                    # An empty result is returned explicitly and visibly -- we do
-                    # not silently omit the call, because "the tool said nothing"
-                    # is the evidence that lets the model say "I don't know".
-                    "empty": len(result["rows"]) == 0,
-                }
+                # Forward the WHOLE result, not just `rows`.
+                #
+                # app/graph.py returns sibling keys next to `rows` that carry the
+                # answer to exactly the questions where `rows` is empty:
+                # current_team -> `departed`, ownership_overview -> `unowned`,
+                # on_call -> `rotation_not_on_call`. Sending only `rows` threw
+                # them away, so for "What team is Aisha Khan on now?" the model
+                # received {"rows": [], "row_count": 0, "empty": true} and the
+                # fact that she LEFT on 2026-06-30 — sitting in `departed`, in the
+                # very payload the tool returned — never reached it. It then
+                # answered "The graph contains no current_team edge for Aisha
+                # Khan", which is what the truncated payload actually said.
+                #
+                # That is the worst class of bug here: the answer was computed
+                # correctly and then thrown away on the way to the only component
+                # that could have read it. `trail` is the one key left out — it is
+                # the chip data, already accumulated into `trail` above, and
+                # re-sending it would just triple the tokens.
+                payload: Any = {k: v for k, v in result.items() if k != "trail"}
+                total = len(result["rows"])
+                payload["rows"] = result["rows"][:MAX_ROWS_PER_TOOL_RESULT]
+                payload["row_count"] = len(payload["rows"])
+                payload["total_row_count"] = total
+                # An empty result is returned explicitly and visibly -- we do
+                # not silently omit the call, because "the tool said nothing"
+                # is the evidence that lets the model say "I don't know".
+                payload["empty"] = total == 0
+                if total > MAX_ROWS_PER_TOOL_RESULT:
+                    # Say so out loud. A silently shortened list is
+                    # indistinguishable from a short graph, which is the one
+                    # inference rule 3 forbids.
+                    payload["truncated"] = (
+                        f"showing {MAX_ROWS_PER_TOOL_RESULT} of {total} rows; the "
+                        "graph holds more than are shown here. Do not conclude a "
+                        "row is absent because it is not in this list."
+                    )
                 trail.extend(result["trail"])
                 for item in extract_stale(block.name, result["rows"]):
                     stale[(item["type"], item["name"])] = item
@@ -986,6 +1107,7 @@ def extract_stale(tool_name: str, rows: list[dict[str, Any]]) -> list[dict[str, 
       staleness  -> every row is stale; the query filters on last_verified_at.
       expertise  -> a row is stale when the person's last touch is old.
       provenance -> a row is stale when it is a superseded decision.
+      decisions_about -> a row is stale when it is a superseded decision.
       find_documents -> a row is stale when last_verified_at predates the same
                    90-day cutoff staleness() uses (the payments-provider
                    contradiction, findable from the document side too).
@@ -1022,6 +1144,22 @@ def extract_stale(tool_name: str, rows: list[dict[str, Any]]) -> list[dict[str, 
             }
             for row in rows
             if row.get("stale")
+        ]
+
+    if tool_name == "decisions_about":
+        # decisions_about() now returns status like provenance() does, so a
+        # decision found by keyword or id badges the same way. Without this a
+        # keyword lookup for a superseded decision would return it with a stale
+        # flag in `rows` and no badge -- the one signal the frontend styles.
+        return [
+            {
+                "type": "Decision",
+                "name": row.get("id", ""),
+                "reason": row.get("detail", ""),
+                "last_verified_at": row.get("date", ""),
+            }
+            for row in rows
+            if row.get("status") == "superseded"
         ]
 
     if tool_name == "provenance":
