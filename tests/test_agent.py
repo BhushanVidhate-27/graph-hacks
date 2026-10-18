@@ -227,7 +227,9 @@ def test_run_agent_returns_a_populated_trail_and_stale(monkeypatch):
                       input={"service": "payments-gateway"})], "tool_use"),
         _Resp([_Block(type="text", text="Ravi Menon now; Priya left.")], "end_turn"),
     ]
-    monkeypatch.setattr(agent, "_client", lambda: _FakeClient(responses))
+    # _clients (plural) since the key chain landed: run_agent builds one client
+    # per configured key and the retry loop walks them in order.
+    monkeypatch.setattr(agent, "_clients", lambda: [_FakeClient(responses)])
 
     result = agent.run_agent("Who should I ask about payments?")
 

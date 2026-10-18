@@ -244,6 +244,22 @@ def _sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, default=str)}\n\n"
 
 
+def _is_missing_key(exc: Exception) -> bool:
+    """True when the failure is 'no usable API key', so we can say so plainly.
+
+    Matched on several markers rather than one exact sentence: the message is
+    written by whichever layer raised (agent._clients, or a test double), and
+    keying on a single string means a renamed variable silently degrades into
+    the generic "the lookup failed (RuntimeError)" — which tells the operator
+    nothing about the thing they actually need to fix.
+    """
+    msg = str(exc)
+    return isinstance(exc, RuntimeError) and any(
+        marker in msg
+        for marker in ("No model API key", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY")
+    )
+
+
 def _failure_frame(exc: Exception) -> dict[str, Any]:
     """Turn a server-side failure into a payload the frozen contract allows.
 
@@ -258,8 +274,11 @@ def _failure_frame(exc: Exception) -> dict[str, Any]:
     The message names the failure instead of inventing an answer -- the same
     honesty rule the agent loop applies to an empty tool result.
     """
-    if isinstance(exc, RuntimeError) and "ANTHROPIC_API_KEY" in str(exc):
-        reason = "the server has no ANTHROPIC_API_KEY configured"
+    if isinstance(exc, RuntimeError) and _is_missing_key(exc):
+        reason = (
+            "the server has no OPENROUTER_API_KEY_1 "
+            "(or ANTHROPIC_API_KEY) configured"
+        )
     else:
         reason = f"the lookup failed ({type(exc).__name__})"
     return {

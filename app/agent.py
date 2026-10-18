@@ -49,23 +49,45 @@ MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 # --------------------------------------------------------------------------
 # Provider selection
 #
-# Two ways to point this at FastRouter, because filling in a single field should
-# be enough — you should not also have to know to edit the base URL.
+# OpenRouter, with a CHAIN of keys rather than one.
 #
-#   Preferred: set FASTROUTER_API_KEY below and leave everything else alone.
-#   Manual:    set ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL yourself.
+#   OPENROUTER_API_KEY_1   primary
+#   OPENROUTER_API_KEY_2   used when key 1 is rate-limited or rejected
 #
-# FASTROUTER_API_KEY wins when both are present, because it is the more specific
-# statement of intent. Note the bare host: the Anthropic SDK appends
-# /v1/messages itself, so .../api/v1 would become /api/v1/v1/messages and 404.
+# Why a chain: the free-tier allowance is counted PER ACCOUNT
+# ("free-models-per-day", 50/day, observed exhausted mid-demo). One exhausted
+# key therefore fails every model in _model_chain() at once, which reads as a
+# total outage. A second key is a second allowance, and because the retry loop
+# walks keys on the OUTER level and models on the inner, a dead key costs one
+# extra round trip instead of the whole answer.
+#
+# Order matters: primary model first on each key, so a key that can serve the
+# paid model is used before falling through to a free model on the same key.
+#
+# ANTHROPIC_API_KEY / OPENROUTER_API_KEY are still read as fallbacks so an
+# existing .env keeps working without edits.
+#
+# FASTROUTER_API_KEY was removed. Its key was authorised for NONE of the 214
+# models it advertises ("Api key provided is not authorised to use the given
+# model"), so it could only ever produce a dead answer.
 # --------------------------------------------------------------------------
-_FASTROUTER_KEY = os.getenv("FASTROUTER_API_KEY", "").strip()
-_API_KEY = _FASTROUTER_KEY or os.getenv("ANTHROPIC_API_KEY", "")
-_BASE_URL = (
-    "https://api.fastrouter.ai"
-    if _FASTROUTER_KEY
-    else os.getenv("ANTHROPIC_BASE_URL")
-)
+_BASE_URL = os.getenv("ANTHROPIC_BASE_URL") or "https://openrouter.ai/api"
+
+
+def _key_chain() -> list[str]:
+    """Configured OpenRouter keys, in order, blanks dropped, de-duplicated."""
+    raw = [
+        os.getenv("OPENROUTER_API_KEY_1", ""),
+        os.getenv("OPENROUTER_API_KEY_2", ""),
+        os.getenv("ANTHROPIC_API_KEY", ""),
+        os.getenv("OPENROUTER_API_KEY", ""),
+    ]
+    out: list[str] = []
+    for k in raw:
+        k = k.strip()
+        if k and k not in out:
+            out.append(k)
+    return out
 
 # Response budget per round. Was hardcoded at 1024, which is fine on a healthy
 # balance and fatal on a thin one: OpenRouter rejects the whole request with
@@ -124,14 +146,23 @@ def _model_chain() -> list[str]:
     return chain
 
 
-def _create_with_retry(client: Any, *, attempts: int = 4, **kwargs: Any) -> Any:
+def _create_with_retry(
+    clients: list[Any], *, attempts: int = 4, **kwargs: Any
+) -> Any:
     """Call client.messages.create, retrying transient failures with backoff.
 
-    Walks ANTHROPIC_FALLBACK_MODELS if the primary model keeps failing, so a
-    rate-limited free model does not become a dead answer. Honours Retry-After
-    when the provider sends one, otherwise backs off exponentially. Gives up on
-    anything that is not transient, so a genuine missing key still fails fast
-    with a useful message.
+    Walks _model_chain() on the OUTER level and the key chain on the inner one.
+    That order is deliberate. The free-tier allowance is counted per account, so
+    a rate-limited key fails EVERY model at once. Walking keys first (model inner)
+    therefore burns the full retry budget on key 1's dead free models before
+    key 2 is ever tried — measured at 2m31s for one question. Walking the
+    primary model across all keys first means a healthy key 2 answers on the
+    second attempt instead, and free models are only reached when every key has
+    failed the paid one.
+
+    Honours Retry-After when the provider sends one, otherwise backs off
+    exponentially. Gives up on anything that is not transient, so a genuine
+    missing key still fails fast with a useful message.
     """
     import time
 
@@ -139,22 +170,26 @@ def _create_with_retry(client: Any, *, attempts: int = 4, **kwargs: Any) -> Any:
     last: Exception | None = None
 
     for model in chain:
-        for attempt in range(attempts):
-            try:
-                return client.messages.create(model=model, **kwargs)
-            except Exception as exc:  # noqa: BLE001 - re-raised below if not transient
-                status = getattr(exc, "status_code", None)
-                if status not in _RETRY_STATUS or attempt == attempts - 1:
-                    last = exc
-                    break  # this model is done; try the next one
-                delay = 2.0 * (attempt + 1)
-                headers = getattr(getattr(exc, "response", None), "headers", None)
-                if headers:
-                    try:
-                        delay = max(delay, float(headers.get("Retry-After", delay)))
-                    except (TypeError, ValueError):
-                        pass
-                time.sleep(min(delay, 20.0))
+        for client in clients:
+            for attempt in range(attempts):
+                try:
+                    return client.messages.create(model=model, **kwargs)
+                except Exception as exc:  # noqa: BLE001 - re-raised below if not transient
+                    status = getattr(exc, "status_code", None)
+                    if status not in _RETRY_STATUS or attempt == attempts - 1:
+                        last = exc
+                        break  # this model is done; try the next one
+                    delay = 1.0 * (attempt + 1)
+                    headers = getattr(getattr(exc, "response", None), "headers", None)
+                    if headers:
+                        try:
+                            delay = max(delay, float(headers.get("Retry-After", delay)))
+                        except (TypeError, ValueError):
+                            pass
+                    # Cap hard. A demo that stalls for minutes is worse than one
+                    # that fails fast: the honest error frame is a usable answer,
+                    # a spinner is not. 5s ceiling, so a 429 cannot eat the slot.
+                    time.sleep(min(delay, 5.0))
 
     raise last if last else RuntimeError("no model available")
 
@@ -537,17 +572,18 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 # The loop
 # --------------------------------------------------------------------------- #
 
-def _client() -> anthropic.Anthropic:
-    if not _API_KEY:
+def _clients() -> list[anthropic.Anthropic]:
+    """One client per configured key, in chain order."""
+    keys = _key_chain()
+    if not keys:
         raise RuntimeError(
-            "No model API key. Set FASTROUTER_API_KEY (free credits, no card) "
-            "or ANTHROPIC_API_KEY in .env — never commit .env — then restart "
+            "No model API key. Set OPENROUTER_API_KEY_1 (and optionally "
+            "OPENROUTER_API_KEY_2) in .env — never commit .env — then restart "
             "uvicorn, because a running server does not pick up .env edits."
         )
-    kwargs: dict[str, Any] = {"api_key": _API_KEY}
-    if _BASE_URL:
-        kwargs["base_url"] = _BASE_URL
-    return anthropic.Anthropic(**kwargs)
+    return [
+        anthropic.Anthropic(api_key=k, base_url=_BASE_URL) for k in keys
+    ]
 
 
 def run_agent(question: str) -> dict[str, Any]:
@@ -559,7 +595,7 @@ def run_agent(question: str) -> dict[str, Any]:
     frontend can render one continuous proof chain.  `stale` is filled from the
     staleness tool and from any row that carries a stale marker.
     """
-    client = _client()
+    clients = _clients()
 
     messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
     trail: list[dict[str, Any]] = []
@@ -569,7 +605,7 @@ def run_agent(question: str) -> dict[str, Any]:
 
     for _round in range(MAX_TOOL_ROUNDS):
         response = _create_with_retry(
-            client,
+            clients,
             # model comes from _model_chain() inside the wrapper, so it can fail
             # over. Passing it here too would be a duplicate kwarg.
             max_tokens=MAX_TOKENS,
