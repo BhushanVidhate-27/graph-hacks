@@ -762,7 +762,14 @@ _API_CASES = [
 # --------------------------------------------------------------------------- #
 
 _AGENT_CHECKS = {
-    "tools_len_10": lambda: len(agent.TOOLS) == 10,
+    # Was `len(agent.TOOLS) == 10`, which #22 (Microsoft Graph parity) made
+    # false by adding five real tools — 10 -> 15. A hardcoded count fails on
+    # every correct feature addition, and it fails in the one way that reads as
+    # "the agent is broken" rather than "the test is stale". Assert the
+    # invariant instead: the model-visible tool surface and the traversal
+    # surface must stay the same size, so a tool can never be exposed to the
+    # model without a function behind it, or vice versa.
+    "tools_len_matches_graph": lambda: len(agent.TOOLS) == len(graph.TOOLS) > 0,
     "tool_keys": lambda: all(
         {"name", "description", "input_schema"} <= set(t) for t in agent.TOOLS
     ),
