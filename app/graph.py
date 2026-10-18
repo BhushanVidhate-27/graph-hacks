@@ -314,6 +314,7 @@ RETURN d.id AS id,
        d.summary AS summary,
        d.date AS date,
        d.status AS status,
+       d.author AS author,
        evidence,
        prev.id AS superseded_id,
        prev.summary AS superseded_summary
@@ -324,15 +325,26 @@ ORDER BY d.date DESC
 def provenance(project: str) -> dict[str, Any]:
     """Decisions about `project`, who authored the evidence, what it superseded.
 
+    `project` is resolved first (resolve_project), so "payments" finds
+    payments-migration rather than nothing at all.
+
     Traverses SUPERSEDES so a superseded decision shows AS superseded (fact 13),
     which is what lets the agent flag the stale provider-evaluation document
     instead of quoting it as current truth (fact 15).
+
+    Carries `author` — who had the authority to make the call — because without
+    it the tool answers "what was decided" but not "who decides", and the graph
+    has held that attribute (all 32 decisions, Elena Vasquez) since day one with
+    no traversal exposing it. Asked "Who holds decision authority for payments
+    and ledger?", the agent had nothing that mentioned an author at all and
+    answered with the two owning TEAMS, which is ownership, not authority.
     """
+    project = resolve_project(project)
     g = _graph()
     rows = g.query(PROVENANCE, {"project": project}).result_set
 
     out_rows, trail = [], []
-    for did, summary, dt, status, evidence, sup_id, sup_summary in rows:
+    for did, summary, dt, status, author, evidence, sup_id, sup_summary in rows:
         detail = summary
         if sup_id:
             detail += f" [SUPERSEDES {sup_id}]"
@@ -341,7 +353,7 @@ def provenance(project: str) -> dict[str, Any]:
         ev_names = [e for e in (evidence or []) if e]
         out_rows.append({
             "id": did, "summary": summary, "date": dt, "status": status,
-            "evidence": ev_names, "superseded_by": sup_id,
+            "author": author or "", "evidence": ev_names, "superseded_by": sup_id,
             "supersedes_summary": sup_summary, "detail": detail,
         })
         # via_edge is restricted to Ujwal's FROZEN vocabulary of 9 values
@@ -405,15 +417,35 @@ def staleness() -> dict[str, Any]:
         # (last_verified_at), not an edge, and the frozen via_edge vocabulary has
         # no entry for a property name. The row above still carries it.
 
+    # Contradicted documents first, oldest first within each group.
+    #
+    # Order matters here for a reason that is not cosmetic. staleness() returns
+    # 163 rows (162 Document + 1 edge) — measured at 25,985 characters, roughly
+    # 6,500 tokens, which is most of the 8,000 tokens-per-minute the smaller
+    # fallback model will accept for a whole request. The agent has to bound how
+    # much of this it hands back (see MAX_ROWS_PER_TOOL_RESULT in app/agent.py),
+    # and a blind cut on the raw ascending-by-date order sliced off the two rows
+    # that matter most: payments-provider-eval-v3.md sat at index 129 and
+    # -v4.md at 145. The documents contradicted by a live decision are the entire
+    # point of this tool — "how stale is things" is trivia, "which document is a
+    # decision now overrules" is the answer — so they lead, and the trivia fills
+    # whatever is left.
+    doc_rows = []
     for name, last, cited in docs:
         contradicted = [c for c in cited if c]
         detail = f"last verified {last}"
         if contradicted:
             detail += f", evidence for {', '.join(sorted(contradicted))}"
-        out_rows.append({"type": "Document", "name": name, "last_verified_at": last,
-                         "reason": detail, "cited_by": contradicted})
-        trail.append({"type": "Document", "name": name, "detail": detail,
-                      "date": last, "via_edge": "EVIDENCED_BY"})
+        doc_rows.append({"type": "Document", "name": name, "last_verified_at": last,
+                         "reason": detail, "cited_by": contradicted, "_last": last})
+    doc_rows.sort(key=lambda r: (not r["cited_by"], r["_last"] or ""))
+
+    for row in doc_rows:
+        row.pop("_last", None)
+        out_rows.append(row)
+        trail.append({"type": "Document", "name": row["name"],
+                      "detail": row["reason"], "date": row["last_verified_at"],
+                      "via_edge": "EVIDENCED_BY"})
 
     return {"cutoff": cutoff, "rows": out_rows, "trail": _trail(trail),
             "count": len(out_rows)}
@@ -423,29 +455,153 @@ def staleness() -> dict[str, Any]:
 # Supporting lookups used to answer the must-fail questions. These exist so the
 # agent has a real "nothing found" answer instead of an excuse to invent one.
 # ---------------------------------------------------------------------------
+# The team that owns a service is an edge; the PERSON accountable for it today is
+# not. Service-[:OWNED_BY]->Team is the only ownership edge in the schema, and it
+# stops at the team, so "who owns payments-gateway today" cannot be answered from
+# it — GROUND_TRUTH.md fact 1 names Ravi Menon, and the ONLY place his name
+# appears is the free text of D-21's summary ("Reassign payments-gateway ownership
+# from Priya Sharma to Ravi Menon").
+#
+# That matters because "Platform owns payments-gateway" and "Ravi owns
+# payments-gateway" are not the same claim, and the second is the one a human
+# means. Observed live: asked "Who owns payments-gateway today?", the agent called
+# owner_of(), got Platform, and answered "The Platform team owns payments-gateway
+# today" — true of the edge, false of the question, and missing the person who had
+# actually been handed the service two months earlier.
+#
+# So owner_of() rides the ownership-handover decision along on the same row. It is
+# the same lookup expertise() already makes for its "current owner (per decision)"
+# row; this just stops the two tools from disagreeing about who is in charge.
+OWNERSHIP_HANDOVER = """
+MATCH (d:Decision)-[:ABOUT]->(proj:Project)-[:USES]->(s:Service {name: $service})
+WHERE d.summary CONTAINS 'Reassign'
+RETURN d.id AS id, d.summary AS summary, d.date AS date, d.author AS author
+ORDER BY d.date DESC
+LIMIT 1
+"""
+
+# Every service with the team that owns it, in one call. The sweep exists because
+# "does EVERY service have an owner?" is a question about the whole set, and the
+# only way to answer it before was to call owner_of() twenty times — which
+# MAX_TOOL_ROUNDS=6 makes impossible, so the agent answered "I do not know
+# whether every service has an owner" while the graph held the answer and had one
+# traversal that would have produced it. Same shape as zero_dependents(): a
+# whole-set question gets a whole-set tool rather than N single-row calls.
+OWNERSHIP_ROLLUP = """
+MATCH (s:Service)
+OPTIONAL MATCH (s)-[:OWNED_BY]->(t:Team)
+RETURN s.name AS service, t.name AS team
+ORDER BY service
+"""
+
+
 def owner_of(service: str) -> dict[str, Any]:
-    """Team owner of a service. An unowned service returns rows=[] on purpose."""
+    """Team owner of a service. An unowned service returns rows=[] on purpose.
+
+    Each row also carries the most recent recorded ownership handover for the
+    service (OWNERSHIP_HANDOVER), so "who owns X today" can be answered with the
+    person rather than only the team. The handover fields are None for services
+    that have never changed hands — that is an honest absence, not a guess.
+    """
     service, _exact = resolve_service(service)
     g = _graph()
     rows = g.query(
         "MATCH (s:Service {name: $service})-[:OWNED_BY]->(t:Team) "
         "RETURN t.name AS team",
         {"service": service}).result_set
+    handover = g.query(OWNERSHIP_HANDOVER, {"service": service}).result_set
+    hand = handover[0] if handover else (None, None, None, None)
+
     trail = _trail([{"type": "Team", "name": r[0], "via_edge": "OWNED_BY",
                      "detail": f"owns {service}"} for r in rows])
-    return {"service": service, "rows": [{"team": r[0]} for r in rows],
+    return {"service": service,
+            "rows": [{"team": r[0],
+                      "ownership_decision": hand[0],
+                      "ownership_summary": hand[1],
+                      "ownership_date": hand[2],
+                      "ownership_author": hand[3]} for r in rows],
             "trail": trail, "count": len(rows)}
 
 
-def decisions_about(keyword: str) -> dict[str, Any]:
-    """Decisions matching a keyword. An absent keyword returns rows=[] on purpose."""
+def ownership_overview() -> dict[str, Any]:
+    """Every service and the team that owns it, unowned services marked.
+
+    Returns all 20 rows, not just the exceptions: "does every service have an
+    owner?" is only answerable if the model can see that the list is exhaustive,
+    so the unowned names are a convenience field rather than the whole payload.
+    """
     g = _graph()
-    rows = g.query(
-        "MATCH (d:Decision) WHERE d.summary CONTAINS $keyword "
-        "RETURN d.id AS id, d.summary AS summary, d.date AS date",
-        {"keyword": keyword}).result_set
-    return {"keyword": keyword, "rows": [{"id": r[0], "summary": r[1], "date": r[2]}
-                                         for r in rows], "trail": [], "count": len(rows)}
+    rows = g.query(OWNERSHIP_ROLLUP).result_set
+
+    out_rows, trail, unowned = [], [], []
+    for service, team in rows:
+        owned = bool(team)
+        detail = f"owned by {team}" if owned else "NO OWNER"
+        out_rows.append({"service": service, "team": team or "", "owned": owned,
+                         "detail": detail})
+        if not owned:
+            unowned.append(service)
+        else:
+            trail.append({"type": "Team", "name": team, "detail": f"owns {service}",
+                          "via_edge": "OWNED_BY"})
+
+    return {"rows": out_rows, "trail": _trail(trail), "count": len(out_rows),
+            "owned": len(out_rows) - len(unowned), "unowned": unowned}
+
+
+# A decision id is as legitimate a lookup key as a word in the summary, and
+# refusing to match one is what made fact 13 unanswerable. Asked "Is D-14 still
+# the current decision?", the model did the obvious thing — looked D-14 up by id
+# — and got zero rows, because this query only ever did `d.summary CONTAINS $k`
+# and a summary never contains its own id. The agent then reported, fluently and
+# in total confidence, "The graph contains no decision whose summary mentions
+# D-14, so there is no record of a current decision identified as D-14." D-14 is
+# in the graph, it is status=superseded, and D-19 is the decision that replaced
+# it. Every piece of that was one query away.
+#
+# So the same call now also returns status, author and what superseded it: a
+# keyword search that cannot say whether a decision is still in force cannot
+# answer the question people actually ask about decisions.
+#
+# NOTE on the key name: here `superseded_by` means what it says — the decision
+# that REPLACED this one. provenance() above uses the same key for the OPPOSITE
+# direction (it holds the decision this one SUPERSEDES), which is documented at
+# its definition and at agent.extract_stale(). The names collide; the meanings
+# do not. Confusing them is the single cheapest way to badged the live decision
+# as stale, so it is called out in both places rather than left to be rediscovered.
+DECISIONS_ABOUT = """
+MATCH (d:Decision)
+WHERE d.id = $keyword OR d.summary CONTAINS $keyword
+OPTIONAL MATCH (d)<-[:SUPERSEDES]-(newer:Decision)
+WITH d, collect(DISTINCT newer.id) AS replaced
+RETURN d.id AS id, d.summary AS summary, d.date AS date, d.status AS status,
+       d.author AS author, replaced
+ORDER BY d.date DESC
+"""
+
+
+def decisions_about(keyword: str) -> dict[str, Any]:
+    """Decisions matching a keyword OR a decision id.
+
+    An absent keyword returns rows=[] on purpose (fact 17). Each row now carries
+    status/author/superseded_by so "is this still current?" and "who decided
+    this?" are answerable from the same call that found the decision.
+    """
+    g = _graph()
+    rows = g.query(DECISIONS_ABOUT, {"keyword": keyword}).result_set
+    out = []
+    for did, summary, date, status, author, replaced in rows:
+        newer = sorted({r for r in (replaced or []) if r})
+        detail = summary
+        if status == "superseded":
+            detail += " [SUPERSEDED]"
+        elif newer:
+            detail += " [SUPERSEDES " + ", ".join(newer) + "]"
+        out.append({
+            "id": did, "summary": summary, "date": date, "status": status or "",
+            "author": author or "", "superseded_by": newer, "detail": detail,
+        })
+    return {"keyword": keyword, "rows": out, "trail": [], "count": len(out)}
 
 
 # Fact 18.
@@ -602,6 +758,24 @@ ORDER BY depth, report
 """
 
 ALL_TEAMS = "MATCH (t:Team) RETURN t.name AS name"
+ALL_PROJECTS = "MATCH (p:Project) RETURN p.name AS name"
+
+# Every dependent of a service, with the most recent touch by ANY contributor to
+# ANY project that uses it. A null last_touch means no contributor at all.
+#
+# The join has to go through Project: CONTRIBUTED_TO points at a Project, never at
+# a Service, so "has anyone worked on this service lately" is only expressible as
+# project -> service. Matching people straight onto the service returns nothing
+# and reads as "no contributor", which on its own is the right answer for
+# exactly one service in this graph and wrong for the other seven.
+DEPENDENT_RECENCY = """
+MATCH (s:Service {name: $service})-[:HAS_DEPENDENT*1..4]->(dep:Service)
+OPTIONAL MATCH (proj:Project)-[:USES]->(dep)
+OPTIONAL MATCH (p:Person)-[c:CONTRIBUTED_TO]->(proj)
+WITH dep, max(c.last_touch) AS last_touch
+RETURN dep.name AS service, last_touch
+ORDER BY service
+"""
 
 TEAM_MEMBERS = """
 MATCH (t:Team {name: $team})<-[m:MEMBER_OF]-(p:Person)
@@ -644,6 +818,92 @@ RETURN d.name AS name, d.kind AS kind, d.date AS date, d.project AS project,
 ORDER BY d.date DESC
 LIMIT 15
 """
+
+
+def resolve_project(name: str) -> str:
+    """Map a loose phrase onto a real Project name. Returns the input unchanged
+    when nothing matches, so an unknown project still answers honestly.
+
+    provenance() takes a project but people ask about SERVICES and TOPICS:
+    "Who holds decision authority for payments and ledger?" made the agent call
+    provenance("payments") and provenance("ledger"), both of which name no
+    project, so both returned nothing and the agent reported "The graph contains
+    no decision record for the payments project" — while D-21 and D-19 sit right
+    there ABOUT payments-migration. Same failure resolve_service() was written for,
+    on the project side, and it is the reason that helper exists at all.
+
+    The acceptance rule is deliberately stricter than resolve_service()': EVERY
+    content word of the query must appear in the candidate, not just one. "ledger"
+    -> "ledger-reconciliation" is safe (one word, one candidate). A looser
+    "best token overlap wins" rule also maps hostile strings like
+    "payments-gateway' RETURN 1 //" onto payments-migration on the strength of the
+    single word "payments" — which is precisely the input-generation the garbage
+    suite exists to keep away from the graph. Requiring full coverage keeps both
+    properties: honest phrases resolve, injection-ish strings do not.
+    """
+    g = _graph()
+    names = [r[0] for r in g.query(ALL_PROJECTS).result_set]
+    raw = (name or "").strip()
+    if not raw:
+        return name
+
+    low = raw.lower()
+    for suffix in (" project", "-project", "_project"):
+        if low.endswith(suffix):
+            low = low[: -len(suffix)]
+    low = low.replace("the ", "").strip()
+
+    if raw in names:
+        return raw
+    for n in names:
+        if n.lower() == low:
+            return n
+
+    tokens = [t for t in re.split(r"[^a-z0-9]+", low) if len(t) > 2]
+    if not tokens:
+        return name
+
+    hits = []
+    for n in names:
+        ntoks = set(re.split(r"[^a-z0-9]+", n.lower()))
+        if all(any(t == nt or t in nt for nt in ntoks) for t in tokens):
+            hits.append(n)
+    # One candidate only. Two plausible projects means the asker was ambiguous,
+    # and an ambiguous guess is an invented node.
+    return hits[0] if len(hits) == 1 else name
+
+
+def stale_dependents(service: str) -> dict[str, Any]:
+    """Dependents of `service` with no contributor in the 90-day window (fact 7).
+
+    Fact 7 is one of the twenty ground truths and NO traversal answered it:
+    blast_radius() returns the dependents but nothing about their contributors,
+    and expertise() gives recency one service at a time, so answering it meant
+    eight separate calls — more than MAX_TOOL_ROUNDS allows. The agent's only
+    honest option was to give up, and it did: "I do not know."
+    """
+    service, _exact = resolve_service(service)
+    g = _graph()
+    cutoff = _cutoff()
+    rows = g.query(DEPENDENT_RECENCY, {"service": service}).result_set
+
+    out_rows, trail, quiet = [], [], []
+    for dep, last_touch in rows:
+        stale = not last_touch or last_touch < cutoff
+        detail = (f"last contributor {last_touch}" if last_touch
+                  else "no contributor recorded")
+        if stale:
+            detail += " [STALE]"
+        out_rows.append({"service": dep, "last_contributor_touch": last_touch or "",
+                         "stale": stale, "detail": detail})
+        if stale:
+            quiet.append(dep)
+            trail.append({"type": "Service", "name": dep,
+                          "detail": f"dependent with {detail}",
+                          "via_edge": "HAS_DEPENDENT"})
+
+    return {"service": service, "cutoff": cutoff, "rows": out_rows,
+            "trail": _trail(trail), "count": len(out_rows), "stale": quiet}
 
 
 def resolve_team(name: str) -> str:
@@ -835,6 +1095,27 @@ def search_messages(keyword: str) -> dict[str, Any]:
             "count": len(out_rows)}
 
 
+def _phrase_words(keyword: str) -> list[str]:
+    """Content words of a phrase, for the find_documents() word fallback.
+
+    Drops the filler that carries no search value in a document name ("the",
+    "document", "evaluation") — 'evaluation' is dropped because it is not in any
+    document name, and searching for it costs a round trip to return nothing.
+    Length and stopword filters only: no stemming, no guessing.
+    """
+    stop = {
+        "the", "and", "for", "with", "any", "all", "are", "was", "its", "our",
+        "doc", "docs", "document", "documents", "file", "files", "this", "that",
+        "about", "there", "their", "them", "does", "did", "have", "has",
+    }
+    words, seen = [], set()
+    for raw in re.split(r"[^a-z0-9]+", (keyword or "").lower()):
+        if len(raw) >= 3 and raw not in stop and raw not in seen:
+            seen.add(raw)
+            words.append(raw)
+    return words
+
+
 def find_documents(keyword: str) -> dict[str, Any]:
     """Documents matching a word, kind or project — with freshness and citations.
 
@@ -862,7 +1143,36 @@ def find_documents(keyword: str) -> dict[str, Any]:
                     "name": name, "kind": kind, "date": date, "project": project,
                     "author": author, "last_verified_at": last,
                     "cited_by": _collected(cited),
+                    "matched_via": keyword,
                 }
+
+    # A phrase is not a keyword. DOCUMENT name/kind/project matching is exact per
+    # term, so "provider evaluation" — the phrase a person actually types when
+    # asking about a document they can only describe, not name — matched nothing
+    # and the agent reported "The graph contains no documents matching the keyword
+    # 'provider evaluation', so there is no record to assess whether such a
+    # document is still accurate." Two ADRs existed, both stale, both cited by the
+    # exact decision the question was about. The information was there the whole
+    # time; the lookup was just stricter than the question.
+    #
+    # So: when the whole phrase finds nothing, retry on its individual words. Only
+    # as a fallback, so an exact phrase hit is never diluted by word hits, and
+    # each row records which term actually matched — the model can say "matched on
+    # 'provider'" instead of implying it searched the phrase.
+    if not by_name:
+        for word in _phrase_words(keyword):
+            for v in (word, word.lower()):
+                if v in variants:
+                    continue
+                for name, kind, date, project, author, last, cited in g.query(
+                        DOCUMENTS_BY_KEYWORD, {"kw": v}).result_set:
+                    if name not in by_name:
+                        by_name[name] = {
+                            "name": name, "kind": kind, "date": date,
+                            "project": project, "author": author,
+                            "last_verified_at": last, "cited_by": _collected(cited),
+                            "matched_via": v,
+                        }
 
     out_rows, trail = [], []
     for row in sorted(by_name.values(),
@@ -888,11 +1198,13 @@ TOOLS = {
     "provenance": provenance,
     "staleness": staleness,
     "owner_of": owner_of,
+    "ownership_overview": ownership_overview,
     "decisions_about": decisions_about,
     "zero_dependents": zero_dependents,
     "sla_of": sla_of,
     "current_team": current_team,
     "on_call": on_call,
+    "stale_dependents": stale_dependents,
     # Microsoft Graph parity surface — see section 5 above.
     "reports_to": reports_to,
     "direct_reports": direct_reports,
