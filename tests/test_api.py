@@ -93,7 +93,7 @@ def test_cors_allows_both_vite_origins(client, origin):
 
 def test_backend_failure_yields_an_error_frame_then_done(client, monkeypatch):
     def boom(_question):
-        raise RuntimeError("ANTHROPIC_API_KEY is not set. Put it in .env")
+        raise RuntimeError("GROQ_API_KEY is not set. Put it in .env")
 
     monkeypatch.setattr(main, "answer_question", boom)
 
@@ -108,7 +108,7 @@ def test_backend_failure_yields_an_error_frame_then_done(client, monkeypatch):
     payload = json.loads(frames[-2])
     assert set(payload) == {"answer", "trail", "stale"}
     assert payload["trail"] == [] and payload["stale"] == []
-    assert "ANTHROPIC_API_KEY" in payload["answer"]
+    assert "GROQ_API_KEY" in payload["answer"]
     assert "could not answer" in payload["answer"]
 
 

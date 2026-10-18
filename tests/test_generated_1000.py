@@ -712,13 +712,13 @@ def _check_api(case, mp) -> None:
         assert _client(True, mp).get("/ask").status_code == 405
     elif case == "failure_frame_runtime_error":
         def boom(_q: str):
-            raise RuntimeError("ANTHROPIC_API_KEY is not set")
+            raise RuntimeError("GROQ_API_KEY is not set")
         mp.setattr(main, "answer_question", boom)
         frames = _frames(_client(True, mp).post("/ask", json={"question": "q"}).text)
         assert frames[-1] == "[DONE]"
         payload = json.loads(frames[0])
         assert payload["answer"].startswith("I could not answer that")
-        assert "ANTHROPIC_API_KEY" in payload["answer"]
+        assert "GROQ_API_KEY" in payload["answer"]
         assert payload["trail"] == [] and payload["stale"] == []
     elif case == "failure_frame_generic":
         def boom(_q: str):

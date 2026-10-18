@@ -33,54 +33,74 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
+import urllib.error
+import urllib.request
 from typing import Any, Callable
 
-import anthropic
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# urllib's default CA lookup resolves to the framework OpenSSL directory, which
+# on this machine (python.org 3.14 framework build) does not exist — cafile and
+# capath both come back None, so every HTTPS call fails with
+# CERTIFICATE_VERIFY_FAILED. certifi ships a bundle and is already a transitive
+# dependency. Built only when the default lookup is empty, so an environment
+# with a working system store is left alone.
+if not ssl.get_default_verify_paths().cafile and not ssl.get_default_verify_paths().capath:
+    try:
+        import certifi
+
+        _SSL_CTX: ssl.SSLContext | None = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:  # pragma: no cover - certifi is a hard requirement
+        _SSL_CTX = None
+else:
+    _SSL_CTX = None
 
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
 
-MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+# Provider: Groq, free tier, OpenAI-compatible.
+#
+# Anthropic was removed outright. Its SDK appends /v1/messages to whatever base
+# URL it is given and only Groq's /openai/v1/chat/completions exists here
+# (verified: /anthropic/v1/messages is a 404), so there was no configuration
+# that made both work. The tool loop below is spoken directly over HTTP rather
+# than through an SDK, which also drops a dependency.
+#
+# gpt-oss-120b is verified to return finish_reason="tool_calls" with a correct
+# arguments object, which is the one thing this whole app depends on.
+MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+
+# 1,000 requests/day free, confirmed from the live x-ratelimit headers rather
+# than from the docs. That is 20x OpenRouter's free cap of 50/day, which is what
+# made a live demo survivable.
+_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
 
 # --------------------------------------------------------------------------
 # Provider selection
 #
-# OpenRouter, with a CHAIN of keys rather than one.
+# GROQ_API_KEY, plus GROQ_API_KEY_2 as an optional second account.
 #
-#   OPENROUTER_API_KEY_1   primary
-#   OPENROUTER_API_KEY_2   used when key 1 is rate-limited or rejected
+# Groq's free tier is counted per account, so the chain is kept: one exhausted
+# key should cost a round trip, not the answer.
 #
-# Why a chain: the free-tier allowance is counted PER ACCOUNT
-# ("free-models-per-day", 50/day, observed exhausted mid-demo). One exhausted
-# key therefore fails every model in _model_chain() at once, which reads as a
-# total outage. A second key is a second allowance, and because the retry loop
-# walks keys on the OUTER level and models on the inner, a dead key costs one
-# extra round trip instead of the whole answer.
-#
-# Order matters: primary model first on each key, so a key that can serve the
-# paid model is used before falling through to a free model on the same key.
-#
-# ANTHROPIC_API_KEY / OPENROUTER_API_KEY are still read as fallbacks so an
-# existing .env keeps working without edits.
-#
-# FASTROUTER_API_KEY was removed. Its key was authorised for NONE of the 214
-# models it advertises ("Api key provided is not authorised to use the given
-# model"), so it could only ever produce a dead answer.
+# OpenRouter keys are deliberately NOT read here. The two providers speak
+# different protocols, so a stray OpenRouter key in .env became the second
+# "Groq key" and every request that reached it 401'd with "Invalid API Key" —
+# which then read as "the Groq key is bad" and sent debugging in the wrong
+# direction. Keys must match the provider.
 # --------------------------------------------------------------------------
-_BASE_URL = os.getenv("ANTHROPIC_BASE_URL") or "https://openrouter.ai/api"
+_RETRY_STATUS = {401, 402, 408, 409, 425, 429, 500, 502, 503, 504, 529}
 
 
 def _key_chain() -> list[str]:
-    """Configured OpenRouter keys, in order, blanks dropped, de-duplicated."""
+    """Configured Groq keys, in order, blanks dropped, de-duplicated."""
     raw = [
-        os.getenv("OPENROUTER_API_KEY_1", ""),
-        os.getenv("OPENROUTER_API_KEY_2", ""),
-        os.getenv("ANTHROPIC_API_KEY", ""),
-        os.getenv("OPENROUTER_API_KEY", ""),
+        os.getenv("GROQ_API_KEY", ""),
+        os.getenv("GROQ_API_KEY_2", ""),
     ]
     out: list[str] = []
     for k in raw:
@@ -95,7 +115,7 @@ def _key_chain() -> list[str]:
 # answer is refused outright rather than truncated. Observed live:
 #   "You requested up to 1024 tokens, but can only afford 842."
 # Overridable so a thin balance can still produce answers without a code change.
-MAX_TOKENS = int(os.getenv("ANTHROPIC_MAX_TOKENS", "1024"))
+MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "1024"))
 
 # Transient failures that deserve a retry rather than a dead stream. 429 and 5xx
 # are obvious; OpenRouter's in-flight budget also surfaces as 402 with
@@ -111,26 +131,21 @@ _RETRY_STATUS = {401, 402, 408, 409, 425, 429, 500, 502, 503, 504, 529}
 # Model failover. ANTHROPIC_MODEL is tried first; if it keeps failing, each entry
 # here is tried in turn. Motivation: free OpenRouter models are free but rate-
 # limited hard, so a live demo can lose its answer to a busy provider rather
-# than to anything wrong with the app. Naming two or three free models gives the
-# demo something to fail over to at no cost.
+# than to anything wrong with the app. Naming two or three models gives the demo
+# something to fail over to at no cost.
 #
-# Note OpenAI itself has no free tier - if you want strictly $0, the fallbacks
-# must also be ":free" OpenRouter slugs.
+# These are the models this Groq key actually has. Verified by listing
+# /openai/v1/models: llama-3.3-70b-versatile is NOT among them and returns
+# model_not_found, so the commonly-recommended default is simply unavailable
+# here. gpt-oss-120b is verified to emit finish_reason="tool_calls" with a
+# correct arguments object; qwen3.8-27b is the backup. The prompt-guard, whisper
+# and allam entries are excluded: guards classify text rather than answer, and
+# the speech models have no chat interface.
 FALLBACK_MODELS = [
     m.strip()
     for m in os.getenv(
-        "ANTHROPIC_FALLBACK_MODELS",
-        # Default chain: free OpenRouter slugs, strongest first, so a
-        # rate-limited or empty-balance primary has somewhere free to fail over
-        # to. These are the ones actually VERIFIED to drive the tool-use loop to a
-        # correct must-fail answer against this graph — not every ":free" slug
-        # supports the loop. Tested and rejected: gemma-4-26b/31b (rate limited
-        # on sight), nemotron-ultra-550b and nano-omni (TypeError on the tool
-        # response shape), nemotron-3.5-lightning (empty body). gpt-oss and
-        # Sarvam are FastRouter slugs and 404 on OpenRouter.
-        "nvidia/nemotron-3-super-120b-a12b:free,"
-        "nvidia/nemotron-3.5-super-vl:free,"
-        "google/gemma-4-31b-it:free",
+        "GROQ_FALLBACK_MODELS",
+        "qwen/qwen3.8-27b,openai/gpt-oss-20b",
     ).split(",")
     if m.strip()
 ]
@@ -599,18 +614,248 @@ _DASH_FOLD = dict.fromkeys(
 )
 
 
-def _clients() -> list[anthropic.Anthropic]:
+class _GroqError(Exception):
+    """HTTP failure from Groq.
+
+    Carries `status_code` so the retry loop can tell a transient 429 from a
+    permanent 404, and a `response` shim because that is where the loop looks
+    for Retry-After — Groq sets it on 429 and honouring it beats guessing.
+    """
+
+    def __init__(self, status: int, message: str, headers: Any = None) -> None:
+        super().__init__(f"HTTP {status}: {message}")
+        self.status_code = status
+        self.response = type("_R", (), {"headers": headers or {}})()
+
+
+class _GroqClient:
+    """Minimal OpenAI-compatible client for Groq.
+
+    Hand-rolled over urllib rather than pulling in the openai SDK: the whole
+    surface used here is one POST to /chat/completions, and an SDK would add a
+    dependency to save about forty lines. Tool schemas are already in OpenAI
+    shape ({"name", "description", "input_schema"}), so the translation is a
+    rename of one key rather than a rewrite.
+
+    Deliberately not streaming: the app's SSE stream is built from whole
+    answer frames by app/main.py, so per-token streaming would buy nothing.
+    """
+
+    def __init__(self, api_key: str) -> None:
+        self.api_key = api_key
+        self.messages = self  # so client.messages.create(...) reads naturally
+
+    def create(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+        system: str,
+        tools: list[dict[str, Any]],
+        max_tokens: int,
+    ) -> _Response:
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": system}]
+            + _to_openai_messages(messages),
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t["description"],
+                        # Anthropic calls it input_schema; OpenAI calls it
+                        # parameters. Same JSON Schema underneath.
+                        "parameters": t["input_schema"],
+                    },
+                }
+                for t in tools
+            ],
+            "max_tokens": max_tokens,
+        }
+        req = urllib.request.Request(
+            f"{_BASE_URL}/chat/completions",
+            data=json.dumps(payload).encode(),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                # urllib's default is "Python-urllib/3.14", and Groq sits
+                # behind Cloudflare, which answers that with 403 error code
+                # 1010 ("browser integrity check") — while the identical
+                # request from curl returns 200. Identified by sending both and
+                # comparing; a User-Agent is the only difference.
+                "User-Agent": "helio-agent/1.0 (+https://github.com/BhushanVidhate-27/graph-hacks)",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=120, context=_SSL_CTX) as resp:
+                body = json.loads(resp.read().decode())
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode(errors="replace")
+            try:
+                message = json.loads(raw)["error"]["message"]
+            except (ValueError, KeyError):
+                message = raw[:200]
+            raise _GroqError(exc.code, message, dict(exc.headers)) from exc
+        except urllib.error.URLError as exc:
+            raise _GroqError(503, str(exc.reason)) from exc
+
+        msg = body["choices"][0]["message"]
+        return _Response(
+            text=msg.get("content") or "",
+            tool_calls=[
+                {
+                    "id": tc["id"],
+                    "name": tc["function"]["name"],
+                    # OpenAI delivers arguments as a JSON *string*; malformed
+                    # JSON is possible in principle, so it is parsed defensively
+                    # rather than trusted.
+                    "arguments": _parse_arguments(tc["function"].get("arguments")),
+                }
+                for tc in msg.get("tool_calls") or []
+            ],
+        )
+
+
+def _to_openai_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Translate the loop's Anthropic-shaped transcript into OpenAI's format.
+
+    Done in exactly one place, at the wire boundary, so the loop above keeps
+    reading like the Anthropic API it was written against and only the transport
+    knows the provider changed.
+
+    Two differences that Groq rejects outright (HTTP 400, verified):
+
+      * tool CALLS: Anthropic puts them in the assistant's `content` as blocks
+        of type "tool_use". OpenAI has a separate top-level `tool_calls` array
+        with `function.arguments` as a JSON *string*.
+      * tool RESULTS: Anthropic puts them in a user message whose content blocks
+        are type "tool_result" keyed by `tool_use_id`. OpenAI wants one
+        `role: "tool"` message per call, keyed by `tool_call_id`.
+
+    Leaving either in Anthropic shape produces:
+      'messages.2.content' : one of the following must be satisfied[
+        ('value must be a string') OR ('content.0.type' : value is not one of
+        the allowed values ['text'])]
+    """
+    out: list[dict[str, Any]] = []
+
+    for msg in messages:
+        role = msg["role"]
+        content = msg.get("content")
+
+        if role == "user" and isinstance(content, list):
+            # One role:"tool" message per tool_result, in order.
+            for block in content:
+                out.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": block["tool_use_id"],
+                        "content": block["content"],
+                    }
+                )
+            continue
+
+        if role == "assistant" and isinstance(content, list):
+            text_parts: list[str] = []
+            tool_calls: list[dict[str, Any]] = []
+            for block in content:
+                if block.get("type") == "text":
+                    text_parts.append(block["text"])
+                elif block.get("type") == "tool_use":
+                    tool_calls.append(
+                        {
+                            "id": block["id"],
+                            "type": "function",
+                            "function": {
+                                "name": block["name"],
+                                "arguments": json.dumps(block.get("input") or {}),
+                            },
+                        }
+                    )
+            assistant: dict[str, Any] = {
+                "role": "assistant",
+                # OpenAI rejects null content on a tool-call turn, so it is
+                # omitted when the model called a tool without narrating.
+                "content": "".join(text_parts) or "",
+            }
+            if tool_calls:
+                assistant["tool_calls"] = tool_calls
+            out.append(assistant)
+            continue
+
+        out.append({"role": role, "content": content})
+
+    return out
+
+
+def _parse_arguments(raw: Any) -> dict[str, Any]:
+    """OpenAI sends tool arguments as a JSON string. Never raise on bad JSON."""
+    if isinstance(raw, dict):
+        return raw
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+class _Block:
+    """One content block: a text chunk or a tool call.
+
+    Attribute access plus __getitem__, because the transcript is appended as
+    plain JSON while the loop reads it as objects — without __getitem__ the
+    transcript would serialise as {"type": ..., } rather than the wire shape.
+    """
+
+    def __init__(self, type: str, **fields: Any) -> None:
+        self.type = type
+        self.text: str | None = fields.get("text")
+        self.id: str | None = fields.get("id")
+        self.name: str | None = fields.get("name")
+        self.input: dict[str, Any] | None = fields.get("input")
+
+    def __getitem__(self, key: str) -> Any:
+        return {"type": self.type, "text": self.text, "id": self.id,
+                "name": self.name, "input": self.input}[key]
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return f"_Block({self.type!r}, name={self.name!r})"
+
+
+class _Response:
+    """What the loop consumes: text, plus tool calls in Anthropic's shape."""
+
+    def __init__(self, text: str, tool_calls: list[dict[str, Any]]) -> None:
+        self.text = text
+        self.tool_calls = tool_calls
+        self.stop_reason = "tool_use" if tool_calls else "end_turn"
+        # The loop below reads block.type / block.text / block.input as
+        # ATTRIBUTES and serialises the same objects into the transcript, so
+        # these are objects, not dicts. Dicts were tried first and fail
+        # immediately with "'dict' object has no attribute 'type'".
+        self.content: list[Any] = []
+        if text:
+            self.content.append(_Block("text", text=text))
+        for tc in tool_calls:
+            self.content.append(
+                _Block("tool_use", id=tc["id"], name=tc["name"], input=tc["arguments"])
+            )
+
+
+def _clients() -> list[_GroqClient]:
     """One client per configured key, in chain order."""
     keys = _key_chain()
     if not keys:
         raise RuntimeError(
-            "No model API key. Set OPENROUTER_API_KEY_1 (and optionally "
-            "OPENROUTER_API_KEY_2) in .env — never commit .env — then restart "
-            "uvicorn, because a running server does not pick up .env edits."
+            "No model API key. Set GROQ_API_KEY in .env — never commit .env — "
+            "then restart uvicorn, because a running server does not pick up "
+            ".env edits."
         )
-    return [
-        anthropic.Anthropic(api_key=k, base_url=_BASE_URL) for k in keys
-    ]
+    return [_GroqClient(k) for k in keys]
 
 
 def run_agent(question: str) -> dict[str, Any]:
@@ -643,7 +888,27 @@ def run_agent(question: str) -> dict[str, Any]:
 
         # Keep the assistant turn in the transcript verbatim -- including any
         # tool_use blocks -- or the next request has dangling tool_result IDs.
-        messages.append({"role": "assistant", "content": response.content})
+        messages.append(
+            {
+                "role": "assistant",
+                # _Block is an object so the loop can read block.type; the
+                # transcript has to be plain JSON because it is re-serialised
+                # into the next request body. Convert here, at the boundary,
+                # rather than making _Block a dict and breaking attribute
+                # access in the loop.
+                "content": [
+                    {
+                        k: v
+                        for k, v in (
+                            (k, getattr(b, k, None))
+                            for k in ("type", "text", "id", "name", "input")
+                        )
+                        if v is not None
+                    }
+                    for b in response.content
+                ],
+            }
+        )
 
         if response.stop_reason != "tool_use":
             answer = _normalise_text(

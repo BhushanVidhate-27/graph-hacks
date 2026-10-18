@@ -256,7 +256,7 @@ def _is_missing_key(exc: Exception) -> bool:
     msg = str(exc)
     return isinstance(exc, RuntimeError) and any(
         marker in msg
-        for marker in ("No model API key", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY")
+        for marker in ("No model API key", "GROQ_API_KEY")
     )
 
 
@@ -275,10 +275,7 @@ def _failure_frame(exc: Exception) -> dict[str, Any]:
     honesty rule the agent loop applies to an empty tool result.
     """
     if isinstance(exc, RuntimeError) and _is_missing_key(exc):
-        reason = (
-            "the server has no OPENROUTER_API_KEY_1 "
-            "(or ANTHROPIC_API_KEY) configured"
-        )
+        reason = "the server has no GROQ_API_KEY configured"
     else:
         reason = f"the lookup failed ({type(exc).__name__})"
     return {

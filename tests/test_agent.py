@@ -1,6 +1,6 @@
 """Tests for app/agent.py — the tool surface and the stale[] wiring.
 
-These run with NO FalkorDB and NO ANTHROPIC_API_KEY: app/graph.py is replaced by
+These run with NO FalkorDB and NO GROQ_API_KEY: app/graph.py is replaced by
 a stub module and the Anthropic client by a scripted fake.  That keeps the two
 things this file owns -- which tools the model can see, and how a tool's rows
 become the frozen payload -- testable on a laptop that has neither.
