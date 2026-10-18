@@ -24,6 +24,36 @@ import sys
 import urllib.request
 
 # (fact, question, [substrings that must ALL appear], [substrings that must appear NOWHERE])
+#
+# `must` is an AND list — every entry has to be present. That is what makes it
+# meaningful for the affirmative facts: "D-19" AND "supersed" both have to be
+# there, because a model that says "D-14 is superseded" without naming D-19 has
+# not answered "is D-14 STILL the current decision".
+#
+# The must-FAIL facts (16, 17, 19, 20) are a different assertion and cannot use
+# it. Their real requirement is "the answer refuses", and refusal has many
+# spellings — no answer can contain all of them at once. Those cases therefore
+# carry ANY_OF instead, and both are matched as alternatives.
+#
+# Getting this wrong is not a rounding error, it is the gate lying in the
+# direction that wastes a day. Measured on a live run, all four must-fail answers
+# were correct and semantically complete refusals, and every one of them FAILED:
+#
+#   Q16 "The graph contains no OWNED_BY edge for config-service - meaning no
+#        team (or person) is recorded as its owner."      -> matched 1 of 8
+#   Q17 "The graph contains no decisions whose summary mentions pricing."
+#                                                          -> matched 1 of 10
+#   Q20 "The graph contains no SLA entry for dispute-service."
+#                                                          -> matched 1 of 7
+#
+# Read as an AND list, those cases demand that every phrasing of "no" appear in
+# one sentence. Widening the vocabulary cannot fix that — it makes it strictly
+# harder, adding conjuncts. An earlier attempt at this gate did exactly that and
+# the pass rate went DOWN. The fix is the matching rule, not the word list.
+#
+# The lists below are kept tight on purpose: each is the set of phrasings a
+# correct refusal has actually been observed to use, not an open-ended thesaurus
+# of words containing "no".
 CASES: list[tuple[int, str, list[str], list[str]]] = [
     (1, "Who owns payments-gateway today?",
      ["Ravi"], ["Priya is the owner"]),
@@ -55,22 +85,47 @@ CASES: list[tuple[int, str, list[str], list[str]]] = [
      ["Elena"], []),
     (15, "Is the provider evaluation document still accurate?",
      ["stale", "D-19"], []),
-    (16, "Who owns config-service?",
-     ["no owned_by", "no team owns", "does not exist", "no owner"],
-     ["Platform team owns config-service"]),
-    (17, "What did checkout decide about pricing?",
-     ["no decision", "not in the graph", "no :decision", "nothing", "not recorded"],
-     ["they decided to change pricing"]),
     (18, "Which services have zero dependents?",
      ["admin-bff", "settlement-batch"], []),
+]
+
+# fact -> (question, ANY_OF refusal markers, forbidden fabrication).
+#
+# `forbidden` is the part that does the real work. It is what would catch a
+# confident invention ("Platform team owns config-service", "99.9%"), so the
+# refusal marker only has to establish that the model did not invent — it is
+# matched as OR because "no OWNED_BY edge", "no recorded owner" and "isn't owned
+# by anyone" are three ways of saying one true thing.
+ANY_OF: list[tuple[int, str, list[str], list[str]]] = [
+    (16, "Who owns config-service?",
+     ["no owned_by", "no owner", "no team owns", "does not exist",
+      "no recorded owner", "not owned", "unowned", "no ownership"],
+     ["Platform team owns config-service"]),
+    (17, "What did checkout decide about pricing?",
+     ["no decision", "not in the graph", "no :decision", "nothing",
+      "not recorded", "no record", "does not contain", "no pricing decision"],
+     ["they decided to change pricing"]),
     (19, "What team is Aisha Khan on now?",
-     ["depart", "left", "no longer"], ["Aisha Khan is on the Growth team"]),
+     ["depart", "left", "no longer", "no current-team", "not recorded",
+      "no current team", "no longer belongs", "no longer with"],
+     ["Aisha Khan is on the Growth team"]),
     (20, "What is the SLA for dispute-service?",
-     ["not in the graph", "no sla", "not recorded", "no sla is", "does not have an sla"],
+     ["not in the graph", "no sla", "not recorded", "no sla is",
+      "does not have an sla", "no recorded sla", "no contracted sla",
+      "no sla entry", "no sla is recorded"],
      ["99.9", "99.95", "99.99"]),
 ]
 
 FAILS: list[tuple] = []
+
+# CASES is the ordered, numbered list the report prints. ANY_OF cases are folded
+# back into it so there is exactly ONE ordered sequence of 20 questions and no
+# risk of the two lists drifting apart on the fact numbers.
+ORDERED: list[tuple[int, str, list[str], list[str], bool]] = sorted(
+    [(f, q, m, x, True) for f, q, m, x in CASES]
+    + [(f, q, m, x, False) for f, q, m, x in ANY_OF],
+    key=lambda c: c[0],
+)
 
 
 def ask(base: str, question: str) -> str:
@@ -126,10 +181,10 @@ def main() -> int:
     base = args.base_url.rstrip("/")
 
     print("=" * 96)
-    print(f"B6 AT THE AGENT LAYER — 20 questions via POST {base}/ask")
+    print(f"B6 AT THE AGENT LAYER — {len(ORDERED)} questions via POST {base}/ask")
     print("=" * 96)
 
-    for fact, question, must, forbidden in CASES:
+    for fact, question, must, forbidden, is_and in ORDERED:
         try:
             answer = ask(base, question)
         except Exception as exc:
@@ -138,7 +193,14 @@ def main() -> int:
             continue
 
         low = _norm(answer)
-        missing = [m for m in must if _norm(m) not in low]
+        # `must` is matched as AND for the affirmative facts and OR for the
+        # must-fail ones — see the note above ANY_OF. Getting the flag wrong
+        # fails correct answers and, worse, makes a fabricated answer pass.
+        matched = [m for m in must if _norm(m) in low]
+        if is_and:
+            missing = [m for m in must if _norm(m) not in low]
+        else:
+            missing = [] if matched else list(must)
         leaked = [f for f in forbidden if _norm(f) in low]
         ok = not missing and not leaked and bool(answer.strip())
 
@@ -147,7 +209,10 @@ def main() -> int:
         else:
             note = []
             if missing:
-                note.append(f"missing {missing}")
+                note.append(
+                    f"missing {missing}" if is_and
+                    else f"no refusal marker; saw none of {must}"
+                )
             if leaked:
                 note.append(f"fabricated {leaked}")
             if not answer.strip():
@@ -158,7 +223,7 @@ def main() -> int:
             print(f"       issue : {'; '.join(note)}")
 
     print("=" * 96)
-    print(f"{len(CASES)} questions, {len(FAILS)} FAIL")
+    print(f"{len(ORDERED)} questions, {len(FAILS)} FAIL")
     print("=" * 96)
     if FAILS:
         print("\nGate 2 does NOT pass at the agent layer. Failures above.")
