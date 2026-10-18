@@ -67,6 +67,9 @@ def _graph():
         kwargs["username"] = USERNAME
     if PASSWORD:
         kwargs["password"] = PASSWORD
+    return FalkorDB(**kwargs).select_graph(GRAPH)
+
+
 def db_health() -> bool:
     """Return True if FalkorDB is reachable and responding."""
     try:
