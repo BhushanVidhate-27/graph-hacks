@@ -22,3 +22,8 @@ env/
 # and ignored from here. A merge has already re-added it once, so it stays listed.
 .DS_Store
 Thumbs.db
+
+# Browser-automation scratch. The MCP server writes a console log and a page
+# snapshot per navigation; eight of them were committed by accident and they say
+# nothing about the product.
+.playwright-mcp/
