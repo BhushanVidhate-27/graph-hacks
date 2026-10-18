@@ -322,14 +322,29 @@ def stream_answer(question: str) -> Iterator[str]:
 
 app = FastAPI(title="Helio company brain", version="0.1.0")
 
-# CORS: the frontend dev server runs on 5173.  Port 3000 is the FalkorDB
-# Browser, not the Node dev server — allowing it would be a copy-paste bug.
+# CORS.
+#
+# A browser treats `localhost` and `127.0.0.1` as DIFFERENT origins, and every
+# dev server prints whichever one you opened — so both must be allowed or the
+# SSE stream is blocked with a bare "Failed to fetch" that reads as a server
+# bug rather than an origin mismatch.
+#
+# Env-driven because the frontend now lives in a separate Next.js app that runs
+# on 3000 (5173 was the old Vite port) and is deployed to its own domain. Hard-
+# coding either port meant a new frontend origin silently broke the demo.
+# Set CORS_ALLOW_ORIGINS to a comma-separated list to add the deployed site.
+_DEFAULT_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+_EXTRA = [o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()]
+ALLOWED_ORIGINS = _DEFAULT_ORIGINS + _EXTRA
+
 app.add_middleware(
     CORSMiddleware,
-    # localhost and the literal 127.0.0.1 are DIFFERENT origins to a browser, and
-    # Vite prints whichever the user opened, so both are allowed or the stream is
-    # blocked by CORS in a way that reads as a server bug.
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
