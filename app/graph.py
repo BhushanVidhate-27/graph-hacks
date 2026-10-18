@@ -542,6 +542,330 @@ def current_team(person: str) -> dict[str, Any]:
             "count": len(current)}
 
 
+# ---------------------------------------------------------------------------
+# 5. DIRECTORY, CHAT AND FILES — the Microsoft Graph parity surface
+# ---------------------------------------------------------------------------
+# Microsoft Graph is the "company graph" every judge already knows: /manager
+# and /directReports for the reporting line, /groups/{id}/members for rosters,
+# chat-message search, drive-item search. docs/microsoft-graph-parity.md maps
+# its resource surface onto this schema and found four capabilities the data
+# already carried but no tool exposed:
+#
+#   1. REPORTS_TO (99 edges, loaded since day one, NEVER queried by anything)
+#   2. MEMBER_OF as a roster (only reachable per-person via current_team)
+#   3. Message + MENTIONS (2,000 nodes the agent could not read at all)
+#   4. Document (200 nodes surfaced only as staleness rows or decision evidence)
+#
+# The README promises "traversal first, text search only at the leaves" — and
+# until this section the agent had NO leaf search over messages or documents,
+# so the leaves existed in the graph and the agent could not read them.
+#
+# Everything here stays inside the frozen contract: via_edge values are taken
+# from web/index.html's closed 14-entry VIA_EDGE_VOCABULARY (REPORTS_TO and
+# MENTIONS and EVIDENCED_BY and MEMBER_OF are all in it), and any stale[]
+# emissions use the 7-type vocabulary in app/agent.py.
+
+# The chain ABOVE a person. min(length(path)) dedupes diamond shapes, the same
+# reason BLAST_RADIUS needs it: with 99 REPORTS_TO edges a manager is sometimes
+# reachable at two depths and would otherwise be returned twice.
+REPORTS_UP = """
+MATCH path = (p:Person {name: $person})-[:REPORTS_TO*1..6]->(m:Person)
+WITH m, min(length(path)) AS depth
+RETURN m.name AS manager, m.title AS title, m.seniority AS seniority, depth
+ORDER BY depth
+"""
+
+# The chain BELOW a person. Same edge, opposite question: the SOURCE side is the
+# report and the target side is the manager, so "who reports to X" walks
+# (dr)-[:REPORTS_TO*]->(x) — never a reversed edge.
+REPORTS_DOWN = """
+MATCH path = (dr:Person)-[:REPORTS_TO*1..6]->(p:Person {name: $person})
+WITH dr, min(length(path)) AS depth
+RETURN dr.name AS report, dr.title AS title, dr.seniority AS seniority, depth
+ORDER BY depth, report
+"""
+
+ALL_TEAMS = "MATCH (t:Team) RETURN t.name AS name"
+
+TEAM_MEMBERS = """
+MATCH (t:Team {name: $team})<-[m:MEMBER_OF]-(p:Person)
+RETURN p.name AS person, p.title AS title, p.seniority AS seniority,
+       m.role AS role, m.since AS since, m.valid_to AS valid_to
+"""
+
+# Message leaves. Two lookups feed one result — see search_messages().
+# The WITH before RETURN mirrors PROVENANCE: aggregating straight into RETURN
+# with ORDER BY on the same clause is the shape FalkorDB is verified on.
+MESSAGES_BODY = """
+MATCH (m:Message) WHERE m.body CONTAINS $kw
+OPTIONAL MATCH (m)-[:MENTIONS]->(e)
+WITH m, collect(DISTINCT e.name) AS mentions
+RETURN m.id AS id, m.channel AS channel, m.author AS author, m.ts AS ts,
+       m.body AS body, mentions
+ORDER BY m.ts DESC
+LIMIT 20
+"""
+
+# The structural answer plain search cannot give: messages that MENTION an
+# entity even when the body never spells its name the way the asker did.
+MESSAGES_ENTITY = """
+MATCH (m:Message)-[:MENTIONS]->(e {name: $entity})
+OPTIONAL MATCH (m)-[:MENTIONS]->(e2)
+WITH m, collect(DISTINCT e2.name) AS mentions
+RETURN m.id AS id, m.channel AS channel, m.author AS author, m.ts AS ts,
+       m.body AS body, mentions
+ORDER BY m.ts DESC
+LIMIT 20
+"""
+
+DOCUMENTS_BY_KEYWORD = """
+MATCH (d:Document)
+WHERE d.name CONTAINS $kw OR d.kind CONTAINS $kw OR d.project = $kw
+OPTIONAL MATCH (dec:Decision)-[:EVIDENCED_BY]->(d)
+WITH d, collect(DISTINCT dec.id) AS cited_by
+RETURN d.name AS name, d.kind AS kind, d.date AS date, d.project AS project,
+       d.author AS author, d.last_verified_at AS last_verified_at, cited_by
+ORDER BY d.date DESC
+LIMIT 15
+"""
+
+
+def resolve_team(name: str) -> str:
+    """Case-insensitive exact match onto a real Team name.
+
+    "platform", "Platform", "Platform team" → "Platform". Same honest-negative
+    contract as resolve_service: an unknown team returns the original string
+    unchanged, so the query answers "nobody" instead of inventing a roster.
+    """
+    g = _graph()
+    names = [r[0] for r in g.query(ALL_TEAMS).result_set]
+    low = (name or "").lower().strip()
+    for suffix in (" team", "-team", "_team"):
+        if low.endswith(suffix):
+            low = low[: -len(suffix)]
+    for n in names:
+        if n.lower() == low:
+            return n
+    return name
+
+
+def reports_to(person: str) -> dict[str, Any]:
+    """The management chain ABOVE `person` — direct manager first.
+
+    Microsoft Graph's /users/{id}/manager and its transitive form. The
+    REPORTS_TO edges were loaded since day one and nothing queried them: the
+    graph knew the entire reporting line and the agent could not answer "who
+    does Ravi report to" with anything but an invention.
+    """
+    g = _graph()
+    rows = g.query(REPORTS_UP, {"person": person}).result_set
+
+    out_rows, trail = [], []
+    for manager, title, seniority, depth in rows:
+        hops = int(depth)          # driver may hand back an int-like float
+        detail = "direct manager" if hops == 1 else f"manager, {hops} levels up"
+        if title:
+            detail += f" — {title}"
+        out_rows.append({
+            "manager": manager, "title": title, "seniority": seniority,
+            "hops": hops, "direct": hops == 1, "detail": detail,
+        })
+        trail.append({"type": "Person", "name": manager, "detail": detail,
+                      "date": "", "via_edge": "REPORTS_TO"})
+
+    return {"person": person, "rows": out_rows, "trail": _trail(trail),
+            "count": len(out_rows)}
+
+
+def direct_reports(person: str) -> dict[str, Any]:
+    """Everyone who reports to `person`, direct and indirect.
+
+    Microsoft Graph's /users/{id}/directReports and its transitive form. Same
+    edge as reports_to, opposite question — the report is the SOURCE, so this
+    walks (dr)-[:REPORTS_TO*]->(person) and never a reversed arrow.
+    """
+    g = _graph()
+    rows = g.query(REPORTS_DOWN, {"person": person}).result_set
+
+    out_rows, trail = [], []
+    for report, title, seniority, depth in rows:
+        hops = int(depth)
+        detail = "direct report" if hops == 1 else f"indirect report, {hops} levels down"
+        if title:
+            detail += f" — {title}"
+        out_rows.append({
+            "report": report, "title": title, "seniority": seniority,
+            "hops": hops, "direct": hops == 1, "detail": detail,
+        })
+        trail.append({"type": "Person", "name": report, "detail": detail,
+                      "date": "", "via_edge": "REPORTS_TO"})
+
+    return {"person": person, "rows": out_rows, "trail": _trail(trail),
+            "count": len(out_rows)}
+
+
+def team_members(team: str) -> dict[str, Any]:
+    """The roster of `team` — current AND departed — with role and tenure.
+
+    Microsoft Graph's /groups/{id}/members. current_team answers "which team is
+    this person in"; this answers the other direction, "who is in this team".
+    Departed members stay in the rows (flagged, sorted after the current ones)
+    because on this dataset the trap answers live there: the top payments
+    expert is someone who left in April, and a roster that silently drops her
+    hides exactly the tension the product is built to surface.
+    """
+    team = resolve_team(team)
+    g = _graph()
+    rows = g.query(TEAM_MEMBERS, {"team": team}).result_set
+
+    members = []
+    for person, title, seniority, role, since, valid_to in rows:
+        current = not valid_to
+        detail = f"{role or 'member'} since {since}" if current else f"left {valid_to}"
+        if title:
+            detail = f"{title}, {detail}"
+        members.append((current, person, title, seniority, role, since,
+                        valid_to, detail))
+
+    # Current members first, then alphabetical — the order the rows are read in.
+    members.sort(key=lambda m: (not m[0], m[1]))
+
+    out_rows, trail = [], []
+    for current, person, title, seniority, role, since, valid_to, detail in members:
+        out_rows.append({
+            "person": person, "title": title, "seniority": seniority,
+            "role": role, "since": since, "valid_to": valid_to,
+            "current": current, "detail": detail,
+        })
+        trail.append({"type": "Person", "name": person, "detail": detail,
+                      "date": valid_to or since, "via_edge": "MEMBER_OF"})
+
+    departed = sum(1 for m in out_rows if not m["current"])
+    return {"team": team, "rows": out_rows, "trail": _trail(trail),
+            "count": len(out_rows), "current": len(out_rows) - departed,
+            "departed": departed}
+
+
+def _collected(values: list[Any]) -> list[str]:
+    """collect(DISTINCT x) can carry nulls from unmatched OPTIONAL MATCHes."""
+    return sorted({v for v in (values or []) if v})
+
+
+def search_messages(keyword: str) -> dict[str, Any]:
+    """Chat messages mentioning a word, service or person — the leaf search.
+
+    Two lookups feed one result, deduped by message id:
+
+      1. Lexical — body CONTAINS keyword. Tried lower-cased as well as given,
+         because the generator writes bodies in lower case and CONTAINS is
+         case-sensitive; without the variant "Incidents" finds nothing while
+         "incidents" finds everything.
+      2. Structural — messages that MENTION the entity. This is the graph
+         answer plain search cannot give: the asker types "payments service"
+         and the MENTIONS edges know that means payments-gateway, so messages
+         about it are found even where the body spells it differently.
+    """
+    g = _graph()
+    keyword = (keyword or "").strip()
+
+    variants = []
+    for v in (keyword, keyword.lower()):
+        if v and v not in variants:
+            variants.append(v)
+
+    by_id: dict[str, dict[str, Any]] = {}
+    for v in variants:
+        for mid, channel, author, ts, body, mentions in g.query(
+                MESSAGES_BODY, {"kw": v}).result_set:
+            if mid not in by_id:
+                by_id[mid] = {
+                    "id": mid, "channel": channel, "author": author, "ts": ts,
+                    "body": body, "mentions": _collected(mentions),
+                    "matched_via": "body",
+                }
+
+    # Structural pass: the keyword itself, plus whatever resolve_service maps it
+    # onto ("the payments service" -> payments-gateway). An unresolvable
+    # keyword still tries its literal name — resolving must never invent a
+    # target, and a literal match is an honest lookup.
+    entities = {keyword}
+    resolved, _exact = resolve_service(keyword)
+    if resolved:
+        entities.add(resolved)
+    for entity in sorted(entities):
+        if not entity:
+            continue
+        for mid, channel, author, ts, body, mentions in g.query(
+                MESSAGES_ENTITY, {"entity": entity}).result_set:
+            if mid in by_id:
+                by_id[mid]["matched_via"] = "body + mentions"
+            else:
+                by_id[mid] = {
+                    "id": mid, "channel": channel, "author": author, "ts": ts,
+                    "body": body, "mentions": _collected(mentions),
+                    "matched_via": "mentions",
+                }
+
+    out_rows, trail = [], []
+    for row in sorted(by_id.values(), key=lambda r: r["ts"] or "", reverse=True)[:20]:
+        body = row["body"] or ""
+        snippet = body[:70] + ("…" if len(body) > 70 else "")
+        detail = f"{row['channel']}: {snippet} ({row['matched_via']})"
+        out_rows.append({**row, "detail": detail})
+        trail.append({"type": "Message", "name": row["id"], "detail": detail,
+                      "date": row["ts"], "via_edge": "MENTIONS"})
+
+    return {"keyword": keyword, "rows": out_rows, "trail": _trail(trail),
+            "count": len(out_rows)}
+
+
+def find_documents(keyword: str) -> dict[str, Any]:
+    """Documents matching a word, kind or project — with freshness and citations.
+
+    Microsoft Graph's drive-item search. The 200 Document nodes were reachable
+    only as staleness rows or as decision evidence; there was no way to answer
+    "is there a runbook for this?" Freshness rides along per row so the agent
+    can flag a stale doc in the same breath it finds it (the payments-provider
+    contradiction is the demo beat this tool is named on).
+    """
+    g = _graph()
+    keyword = (keyword or "").strip()
+    cutoff = _cutoff()
+
+    variants = []
+    for v in (keyword, keyword.lower()):
+        if v and v not in variants:
+            variants.append(v)
+
+    by_name: dict[str, dict[str, Any]] = {}
+    for v in variants:
+        for name, kind, date, project, author, last, cited in g.query(
+                DOCUMENTS_BY_KEYWORD, {"kw": v}).result_set:
+            if name not in by_name:
+                by_name[name] = {
+                    "name": name, "kind": kind, "date": date, "project": project,
+                    "author": author, "last_verified_at": last,
+                    "cited_by": _collected(cited),
+                }
+
+    out_rows, trail = [], []
+    for row in sorted(by_name.values(),
+                      key=lambda r: r["date"] or "", reverse=True)[:15]:
+        last = row["last_verified_at"]
+        stale = bool(last and last < cutoff)
+        detail = f"{row['kind']}, verified {last}" if last else str(row["kind"])
+        if stale:
+            detail += " [STALE]"
+        if row["cited_by"]:
+            detail += f", cited by {', '.join(row['cited_by'])}"
+        out_rows.append({**row, "stale": stale, "detail": detail})
+        trail.append({"type": "Document", "name": row["name"], "detail": detail,
+                      "date": last or row["date"], "via_edge": "EVIDENCED_BY"})
+
+    return {"keyword": keyword, "rows": out_rows, "trail": _trail(trail),
+            "count": len(out_rows)}
+
+
 TOOLS = {
     "blast_radius": blast_radius,
     "expertise": expertise,
@@ -553,4 +877,10 @@ TOOLS = {
     "sla_of": sla_of,
     "current_team": current_team,
     "on_call": on_call,
+    # Microsoft Graph parity surface — see section 5 above.
+    "reports_to": reports_to,
+    "direct_reports": direct_reports,
+    "team_members": team_members,
+    "search_messages": search_messages,
+    "find_documents": find_documents,
 }

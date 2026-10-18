@@ -170,8 +170,11 @@ You answer questions about a fictional fintech called Helio -- who owns what,
 who knows what, what breaks if a service goes down, and where a decision was
 made -- by calling tools that traverse a knowledge graph. The graph also records
 who is on call and on rotation, which team a person is in now (and whether they
-have left), a service's contracted SLA, which services nothing depends on, and
-decisions matched by keyword.
+have left), the management reporting line (who reports to whom, and full team
+rosters with roles and tenure), a service's contracted SLA, which services
+nothing depends on, decisions matched by keyword, chat messages that mention a
+word, service or person, and documents matched by keyword with their freshness
+and the decisions that cite them.
 
 NON-NEGOTIABLE RULES:
 
@@ -367,6 +370,103 @@ TOOLS: list[dict[str, Any]] = [
             "required": ["team"],
         },
     },
+    # ------------------------------------------------------------------------
+    # The Microsoft Graph parity tools. Microsoft Graph answers /manager,
+    # /directReports, /groups/{id}/members, chat search and drive-item search —
+    # docs/microsoft-graph-parity.md maps each one. These five close the gaps
+    # the data already supported but the agent could not reach: the reporting
+    # line (REPORTS_TO was loaded and never queried), team rosters, and leaf
+    # search over the 2,000 messages and 200 documents.
+    {
+        "name": "reports_to",
+        "description": (
+            "A person's management chain: their direct manager first, then who "
+            "that manager reports to, up to the top. Use for 'who does X report "
+            "to', 'who is X's manager', chain-of-command or skip-level questions."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "person": {
+                    "type": "string",
+                    "description": "Full person name, e.g. Ravi Menon.",
+                }
+            },
+            "required": ["person"],
+        },
+    },
+    {
+        "name": "direct_reports",
+        "description": (
+            "Everyone who reports to a person, direct or through intermediate "
+            "managers. Use for 'who reports to X' or 'who are X's direct reports'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "person": {
+                    "type": "string",
+                    "description": "Full person name, e.g. Elena Vasquez.",
+                }
+            },
+            "required": ["person"],
+        },
+    },
+    {
+        "name": "team_members",
+        "description": (
+            "Everyone on a team, with titles, role and tenure, including members "
+            "who have left. Use for 'who is on / works in the X team' or 'who is "
+            "still on X'. For one named person's team, use current_team instead."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "team": {
+                    "type": "string",
+                    "description": "Team name, e.g. Platform (case-insensitive).",
+                }
+            },
+            "required": ["team"],
+        },
+    },
+    {
+        "name": "search_messages",
+        "description": (
+            "Chat messages that mention a word, service, project or person, "
+            "newest first, with channel, author and who else was mentioned. Use "
+            "for 'what did people say about X in chat' or 'any incident chatter "
+            "about X'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "description": "A word, service or person to look for, e.g. api-gateway.",
+                }
+            },
+            "required": ["keyword"],
+        },
+    },
+    {
+        "name": "find_documents",
+        "description": (
+            "Documents (runbooks, ADRs, postmortems) matching a word, kind or "
+            "project, each with how fresh it is and which decisions cite it. Use "
+            "for 'is there a doc / runbook about X' or 'find docs on X'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "description": "A word, kind or project name, e.g. runbook.",
+                }
+            },
+            "required": ["keyword"],
+        },
+    },
 ]
 
 
@@ -556,6 +656,9 @@ def extract_stale(tool_name: str, rows: list[dict[str, Any]]) -> list[dict[str, 
       staleness  -> every row is stale; the query filters on last_verified_at.
       expertise  -> a row is stale when the person's last touch is old.
       provenance -> a row is stale when it is a superseded decision.
+      find_documents -> a row is stale when last_verified_at predates the same
+                   90-day cutoff staleness() uses (the payments-provider
+                   contradiction, findable from the document side too).
 
     Contract (mock/trail.json): stale[] = [{type, name, reason, last_verified_at}].
     """
@@ -605,6 +708,18 @@ def extract_stale(tool_name: str, rows: list[dict[str, Any]]) -> list[dict[str, 
             }
             for row in rows
             if row.get("status") == "superseded"
+        ]
+
+    if tool_name == "find_documents":
+        return [
+            {
+                "type": "Document",
+                "name": row.get("name", ""),
+                "reason": row.get("detail", ""),
+                "last_verified_at": row.get("last_verified_at", ""),
+            }
+            for row in rows
+            if row.get("stale")
         ]
 
     return []

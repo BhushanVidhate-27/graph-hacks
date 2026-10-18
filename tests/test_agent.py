@@ -136,6 +136,12 @@ def test_every_emitted_stale_type_is_in_the_frozen_vocabulary():
     stale += agent.extract_stale("provenance", [
         {"id": "D-14", "status": "superseded", "date": "2026-03-18", "detail": "d"},
     ])
+    stale += agent.extract_stale("find_documents", [
+        {"name": "payments-provider-eval-v3.md", "stale": True,
+         "last_verified_at": "2026-03-18", "detail": "adr, verified 2026-03-18 [STALE]"},
+        {"name": "incident-runbook.md", "stale": False,
+         "last_verified_at": "2026-10-01", "detail": "runbook, verified 2026-10-01"},
+    ])
     assert stale, "the test must actually produce some stale items"
     assert {s["type"] for s in stale} <= agent.STALE_TYPES
 
@@ -170,6 +176,21 @@ def test_provenance_marks_only_the_superseded_decision_not_the_current_one():
 
 def test_tools_with_no_stale_semantics_return_nothing():
     assert agent.extract_stale("blast_radius", [{"service": "x"}]) == []
+
+
+def test_find_documents_badges_only_the_stale_document():
+    """The Microsoft Graph parity tools keep the frozen stale[] contract.
+    A doc inside the 90-day window must NOT be badged; the stale one must
+    arrive on the wire in exactly the four-key shape."""
+    rows = [
+        {"name": "payments-provider-eval-v3.md", "stale": True,
+         "last_verified_at": "2026-03-18", "detail": "adr, verified 2026-03-18 [STALE]"},
+        {"name": "incident-runbook.md", "stale": False,
+         "last_verified_at": "2026-10-01", "detail": "runbook, verified 2026-10-01"},
+    ]
+    out = agent.extract_stale("find_documents", rows)
+    assert [s["name"] for s in out] == ["payments-provider-eval-v3.md"]
+    assert set(out[0]) == {"type", "name", "reason", "last_verified_at"}
 
 
 # --------------------------------------------------------------------------- #
