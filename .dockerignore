@@ -24,3 +24,31 @@ Thumbs.db
 *.md
 !README.md
 .ipynb_checkpoints/
+
+# front/ is built by the `site` stage, so its dependencies and artifacts must
+# not enter the build context. node_modules alone is several hundred MB and the
+# host copy is platform-specific; shipping it also risks the builder stage
+# resolving it instead of installing a clean tree.
+front/node_modules/
+front/.next/
+front/out/
+front/.husky/
+front/.playwright-mcp/
+front/artifacts/
+front/temp/
+
+# Per-agent instruction folders that ship with the frontend template. They are
+# committed so a teammate's editor config travels with the tree, but they have
+# no business inside the image.
+front/.claude/
+front/.codex/
+front/.cursor/
+front/.continue/
+front/.gemini/
+front/.opencode/
+front/.roo/
+front/.windsurf/
+front/.cline/
+front/.augment/
+front/.amazonq/
+front/.kiro/

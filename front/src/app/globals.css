@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+html {
+  overscroll-behavior: auto !important;
+  overscroll-behavior-y: auto !important;
+  scroll-behavior: auto !important;
+  touch-action: pan-y !important;
+}
+
+body {
+  overflow-y: auto !important;
+  overscroll-behavior-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y !important;
+}
+
+.btn-fill-bg {
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  opacity: 0;
+  transform: translateY(18%);
+  transition: opacity 0.24s ease, transform 0.24s ease;
+  will-change: opacity, transform;
+}
+
+.btn-fill.is-fill-active {
+  color: var(--content--white);
+}
+
+.btn-fill.is-fill-active .btn-fill-bg {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.btn-fill:hover .btn-fill-bg {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.btn-fill:hover {
+  color: var(--content--white);
+}
+
+.loading {
+  pointer-events: none !important;
+}
+
+.header-menu-item.has-submenu {
+  transition: color 0.4s ease, background-color 0.4s ease;
+}
+
+.header-menu-item.has-submenu.nav-submenu-open {
+  color: var(--content--primary);
+}
+
+.header-menu-dropdown.nav-submenu-open {
+  visibility: visible;
+}
+
+.header-menu-item:not(.has-submenu) > .header-menu-item-link,
+.header-menu-dropdown-item,
+.header-cta-new,
+.header-menu-btn {
+  transition: color 0.4s ease, background-color 0.4s ease, transform 0.4s
+    cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.header-menu-item:not(.has-submenu):hover > .header-menu-item-link,
+.header-menu-dropdown-item:hover,
+.header-menu-btn:hover {
+  transform: translateX(0.3rem);
+}
+
+.header-cta-new:hover {
+  transform: translateX(0.3rem);
+}
+
+@media only screen and (max-width: 767px) {
+  .header-menu-inner.nav-open,
+  .header-menu-wrap.nav-open,
+  .header-menu.nav-open {
+    pointer-events: auto;
+  }
+
+  .header-menu-inner.nav-open {
+    height: auto;
+  }
+
+  .header-menu-wrap.nav-open {
+    height: auto;
+  }
+
+  .header-menu.nav-open {
+    pointer-events: auto !important;
+    height: auto;
+    min-height: 21rem;
+  }
+
+  .header.nav-open {
+    pointer-events: auto;
+  }
+}

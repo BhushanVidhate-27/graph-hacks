@@ -1,0 +1,24 @@
+# Helio — static site on Render
+#
+# Three prerendered pages, no server. `/demo` fetches the agent from the browser
+# via NEXT_PUBLIC_HELIO_API (see src/lib/api.ts, which is "use client"), so this
+# is a Static Site rather than a Web Service.
+#
+# Before the first deploy, set NEXT_PUBLIC_HELIO_API to the agent's origin if it
+# moves. The default already points at the live backend:
+#   https://helio-brain.onrender.com
+#
+# NOTE: the agent must allow this site's origin, or /demo fails CORS. After the
+# first successful deploy, add the assigned URL to the backend's
+# CORS_ALLOW_ORIGINS (comma-separated) and redeploy the service.
+
+services:
+  - type: web
+    name: helio-site
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./out
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: NEXT_PUBLIC_HELIO_API
+        value: https://helio-brain.onrender.com

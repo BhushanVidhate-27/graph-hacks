@@ -8,6 +8,10 @@
 #   docker compose up --build
 #   open http://localhost:8080
 #
+# The site is built from front/ inside the image (see the `site` stage of the
+# Dockerfile), so `--build` is required after any frontend change — a plain
+# `up` reuses the old image and serves the previous site.
+#
 # The `seed` service generates the CSVs and loads them into FalkorDB, so the
 # graph is populated without a single manual command. The api waits for seed to
 # finish, so you never hit a live server pointing at an empty graph — which

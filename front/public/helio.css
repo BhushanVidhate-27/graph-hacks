@@ -1,0 +1,696 @@
+/* ===========================================================================
+ * Helio
+ *
+ * Loaded immediately after the captured stylesheet, and deliberately NOT part
+ * of it.
+ *
+ * Two stylesheets want to control the same elements here, and the way out is
+ * not a cascade fight. The captured sheet must stay unlayered and unprefixed,
+ * because its markup is Webflow output that uses class names Tailwind also
+ * owns — `.grid`, `.container`, `.hidden`, `.block`, `.flex`, `.fixed`. Give
+ * the captured sheet a layer and Tailwind's utilities outrank it by layer
+ * order, not specificity, and the landing page collapses: its own `.grid` rules
+ * lose to Tailwind's `.grid`, and every full-width section halves.
+ *
+ * So the captured sheet stays as it was. This file is the other half:
+ *
+ *   - it is unlayered too, but loads LAST, so on the Helio routes it wins on
+ *     source order
+ *   - it does not use Tailwind utilities, because on this page a utility is a
+ *     coin toss against normalize.css
+ *   - the nav fix at the bottom belongs here too: the nowrap rule is a
+ *     correction to the captured markup, not a Helio style
+ *
+ * --header-h is written at runtime by HeaderOffset, which measures the live
+ * header. It is two rows on desktop and one on mobile, so no constant works.
+ * =========================================================================== */
+
+:root {
+  --helio-paper: #f4f3f0;
+  --helio-paper-deep: #eeece7;
+  --helio-ink: #1a1a1a;
+  --helio-ink-soft: rgba(40, 40, 40, 0.72);
+  --helio-ink-faint: rgba(40, 40, 40, 0.44);
+  --helio-ink-ghost: rgba(40, 40, 40, 0.24);
+  --helio-rule: #e2dfd8;
+  --helio-rule-strong: #cfcbc2;
+  --helio-accent: #dd6013;
+  --helio-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --helio-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+body:has(.helio-route) {
+  font-family: var(--helio-sans);
+}
+
+/* --------------------------------------------------------------------------
+ * Page frame
+ * -------------------------------------------------------------------------- */
+.helio-route {
+  box-sizing: border-box;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+  color: var(--helio-ink);
+}
+
+@media (min-width: 640px) {
+  .helio-route {
+    padding: 3rem 1.5rem;
+  }
+}
+
+/* The captured header is position:fixed, so the route has to reserve the space
+   itself — the home page gets this for free from its own markup, this one does
+   not. --header-h is measured at runtime by HeaderOffset: the header is two
+   rows on desktop and one on mobile, and grows again if a label ever wraps, so
+   no constant is correct on more than one breakpoint.
+
+   Declared AFTER the media query on purpose: that query uses the `padding`
+   shorthand, so anything setting padding-top before it is silently undone one
+   breakpoint up — which is exactly the overlap this rule exists to prevent. */
+.helio-route {
+  padding-top: calc(var(--header-h, 0px) + 2.5rem);
+}
+
+.helio-route .helio-kicker {
+  margin: 0;
+  font-family: var(--helio-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--helio-ink-faint);
+}
+
+.helio-route .helio-title {
+  margin: 1rem 0 0;
+  font-size: clamp(2rem, 4.4vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 0.94;
+  text-transform: uppercase;
+}
+
+.helio-route .helio-lede {
+  margin: 1.5rem 0 0;
+  max-width: 42rem;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--helio-ink-soft);
+}
+
+.helio-route .helio-lede code {
+  font-family: var(--helio-mono);
+  font-size: 0.75rem;
+  color: var(--helio-ink);
+}
+
+.helio-route .helio-console {
+  margin-top: 2.5rem;
+}
+
+/* --------------------------------------------------------------------------
+ * Console
+ * -------------------------------------------------------------------------- */
+.hc {
+  box-sizing: border-box;
+  border: 1px solid var(--helio-rule-strong);
+  background: var(--helio-paper);
+  font-family: var(--helio-sans);
+  color: var(--helio-ink);
+}
+
+.hc-ask {
+  border-bottom: 1px solid var(--helio-rule);
+  padding: 1rem;
+}
+
+@media (min-width: 640px) {
+  .hc-ask {
+    padding: 1.25rem;
+  }
+}
+
+.hc-ask-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .hc-ask-row {
+    flex-direction: row;
+  }
+}
+
+.hc-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--helio-rule-strong);
+  border-radius: 0;
+  background: var(--helio-paper);
+  padding: 0.75rem 1rem;
+  font-family: var(--helio-sans);
+  font-size: 0.9375rem;
+  color: var(--helio-ink);
+  outline: none;
+}
+
+.hc-input::placeholder {
+  color: var(--helio-ink-ghost);
+}
+
+.hc-input:focus {
+  border-color: var(--helio-accent);
+}
+
+.hc-btn {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  border: 1px solid var(--helio-rule-strong);
+  border-radius: 0;
+  background: var(--helio-ink);
+  padding: 0.75rem 1.5rem;
+  font-family: var(--helio-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--helio-paper);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.hc-btn:hover:not(:disabled) {
+  background: var(--helio-accent);
+  border-color: var(--helio-accent);
+}
+
+.hc-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.hc-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.hc-chip {
+  box-sizing: border-box;
+  border: 1px solid var(--helio-rule);
+  border-radius: 0;
+  background: none;
+  padding: 0.375rem 0.75rem;
+  font-family: var(--helio-sans);
+  font-size: 0.75rem;
+  text-align: left;
+  color: var(--helio-ink-soft);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.hc-chip:hover:not(:disabled) {
+  border-color: var(--helio-accent);
+  color: var(--helio-ink);
+}
+
+.hc-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hc-body {
+  min-height: 12.5rem;
+  padding: 1rem;
+}
+
+@media (min-width: 640px) {
+  .hc-body {
+    padding: 1.5rem;
+  }
+}
+
+.hc-idle {
+  margin: 0;
+  padding: 2.5rem 0;
+  text-align: center;
+  font-family: var(--helio-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--helio-ink-faint);
+}
+
+.hc-label {
+  margin: 0;
+  font-family: var(--helio-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--helio-ink-faint);
+}
+
+.hc-answer {
+  margin: 0.75rem 0 0;
+  min-height: 3rem;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--helio-ink);
+}
+
+/* --------------------------------------------------------------------------
+ * Answer markdown
+ *
+ * The agent returns light markdown (`**bold**`, `* item`). Rendering it raw
+ * shows literal asterisks in the middle of the most important text on the
+ * page, which is exactly what a judge reads first. Rendered as elements rather
+ * than parsed to HTML — there is no untrusted content here, but there is also
+ * no reason to hand the model a way to inject markup.
+ * -------------------------------------------------------------------------- */
+.hc-answer p {
+  margin: 0 0 0.75rem;
+}
+
+.hc-answer p:last-child {
+  margin-bottom: 0;
+}
+
+.hc-answer strong {
+  font-weight: 600;
+}
+
+.hc-answer ul {
+  margin: 0.25rem 0 0.75rem;
+  padding-left: 1.1rem;
+}
+
+.hc-answer li {
+  margin-bottom: 0.2rem;
+}
+
+.hc-drift {
+  margin: 1rem 0 0;
+  border: 1px solid rgba(221, 96, 19, 0.4);
+  background: rgba(221, 96, 19, 0.05);
+  padding: 0.5rem 0.75rem;
+  font-family: var(--helio-mono);
+  font-size: 0.625rem;
+  color: var(--helio-accent);
+}
+
+.hc-error-label {
+  margin: 0;
+  font-family: var(--helio-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--helio-accent);
+}
+
+.hc-error {
+  margin: 0.75rem 0 0;
+  max-width: 32rem;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: var(--helio-ink-soft);
+}
+
+/* --------------------------------------------------------------------------
+ * Provenance trail
+ * -------------------------------------------------------------------------- */
+.hc-trail {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--helio-rule);
+  padding-top: 1rem;
+}
+
+.hc-trail-empty {
+  margin: 1.5rem 0 0;
+  border-top: 1px solid var(--helio-rule);
+  padding-top: 1rem;
+  font-family: var(--helio-mono);
+  font-size: 0.6875rem;
+  color: var(--helio-ink-faint);
+}
+
+.hc-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.375rem 0.5rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hc-node {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.hc-node-btn {
+  box-sizing: border-box;
+  border: 1px solid var(--helio-rule);
+  border-radius: 0;
+  background: none;
+  padding: 0.375rem 0.625rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hc-node-type {
+  display: block;
+  font-family: var(--helio-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--helio-ink-faint);
+}
+
+.hc-node-name {
+  display: block;
+  margin-top: 0.125rem;
+  font-family: var(--helio-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--helio-ink);
+}
+
+.hc-edge {
+  font-family: var(--helio-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.hc-raw {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0.5rem 0 0;
+  border: 1px solid var(--helio-rule-strong);
+  background: var(--helio-paper-deep);
+  padding: 0.75rem;
+  font-family: var(--helio-mono);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--helio-ink-soft);
+}
+
+.hc-hint {
+  margin: 0.75rem 0 0;
+  font-family: var(--helio-mono);
+  font-size: 0.625rem;
+  color: var(--helio-ink-ghost);
+}
+
+/* --------------------------------------------------------------------------
+ * Correction to the captured markup
+ *
+ * The reference's nav labels are each one short word. Longer ones wrap inside a
+ * fixed-height cell, which grew the fixed header from ~64px to 132px and slid
+ * the page underneath it.
+ * -------------------------------------------------------------------------- */
+.header-menu-item .txt,
+.header-logo-item .txt {
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+ * Compact the fixed header into one short row
+ *
+ * The captured header gives every nav cell `height: 100%` inside a tall flex
+ * column, so each cell became ~120px tall and the header ate a third of a
+ * laptop viewport. The brand grid, the cell borders and the fill animation all
+ * still work — only the vertical sizing is overridden here.
+ * -------------------------------------------------------------------------- */
+.header-inner > .container.grid {
+  align-items: center;
+  min-height: 0;
+}
+
+.header-logo {
+  padding-top: 1.2rem;
+  padding-bottom: 1.2rem;
+  padding-left: 1.2rem;
+  align-items: center;
+}
+
+.header-menu-inner {
+  align-items: center;
+}
+
+.header-menu {
+  align-items: center;
+}
+
+.header-menu-item-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.header-menu-item,
+.header-menu-item.btn-fill,
+.header-menu-dropdown-item {
+  height: auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+}
+
+.header-menu-item .btn-fill,
+.header-menu-dropdown-item .btn-fill {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.header-menu-btn {
+  padding-top: 1.2rem;
+  padding-bottom: 1.2rem;
+}
+
+/* --------------------------------------------------------------------------
+ * Keep the intro tower inside its own column
+ *
+ * The captured slot was an ink-masked landscape image sitting *behind* the
+ * copy, so the grid let the artwork run full width. A tall portrait render in
+ * that same slot escapes the cell and lands on top of the GROUND TRUTH stats.
+ * The image is pinned to its own grid area (columns 1-6) and centred in it.
+ * -------------------------------------------------------------------------- */
+#w-node-_7d517889-8c7b-f09c-abb0-c71784491da2-02cc3ba1 {
+  grid-area: 1 / 1 / 3 / 7;
+  overflow: hidden;
+  min-height: 0;
+  max-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#w-node-_31de0b3a-32be-4ca0-f8bd-e3c3c6ab2f08-02cc3ba1 {
+  grid-area: 1 / 7 / 2 / -1;
+}
+
+.home-intro {
+  overflow: hidden;
+}
+
+.home-intro-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  max-height: 70vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.home-intro-img .img-abs {
+  position: static;
+  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  max-height: 70vh;
+}
+
+/* --------------------------------------------------------------------------
+ * GROUND TRUTH stats
+ *
+ * The captured slot is a partner-logo wall: each item is a 17.2rem square in a
+ * `saturate(0)` block, meant for a wordmark. Holding plain sentences there left
+ * four islands of text with ~17rem of dead space between each. Reuse the slot
+ * as a compact centred list instead.
+ * -------------------------------------------------------------------------- */
+.home-intro-partner-label-wrap {
+  justify-content: center;
+  padding-left: 0;
+  padding-bottom: 1.6rem;
+}
+
+.home-intro-partner-inner {
+  display: flex;
+  flex-flow: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  overflow: visible;
+}
+
+.home-intro-partner-item {
+  width: auto;
+  height: auto;
+  max-width: 30rem;
+  min-height: 0;
+  filter: none;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 0.4rem 0;
+}
+
+/* --------------------------------------------------------------------------
+ * "Right there with you" / "For the whole design"
+ *
+ * The two map headings are grid rows 1 and 2 of a `700dvh` scroll track, sized
+ * `auto`, so both collapsed into one dead zone near the top and the 700vh of
+ * scrolling below them had nothing to reveal. Each row now owns a full
+ * viewport and centres its heading in it, so the section reads as two beats
+ * instead of one void.
+ * -------------------------------------------------------------------------- */
+.home-intel-inner {
+  height: 100vh;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The item is a flex child, so it shrink-wraps to the text and the h1 breaks
+   across two lines at whatever width it lands on. Make it take the full row
+   and centre the text so each heading is one line, centred in its viewport. */
+.home-intel-inner .home-intel-item {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.home-intel-inner .home-intel-item .heading {
+  text-align: center;
+  max-width: none;
+}
+
+/* --------------------------------------------------------------------------
+ * Map section — text beside the artwork
+ *
+ * Both `.home-intel-inner` (the headings) and `.home-map-main-img` (the six
+ * artwork cells) carried `grid-column: 1/-1 !important`, so every one of them
+ * claimed the full row width and stacked on top of each other: the headings
+ * disappeared behind the images and the section read as floating pictures in
+ * empty space. The headings now take column 1 and the artwork column 2.
+ * -------------------------------------------------------------------------- */
+.home-map-main-inner {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  grid-auto-rows: auto;
+  column-gap: 4rem;
+}
+
+.home-intel-inner {
+  grid-column: 1 !important;
+  height: auto;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 2rem;
+}
+
+#w-node-_0b8e7963-92b8-b112-e704-dce2e7ef26a1-02cc3ba1 {
+  grid-area: 1 / 1 / 2 / 2 !important;
+}
+
+#w-node-_568975e1-1c8c-fc18-c9df-2240109c626b-02cc3ba1 {
+  grid-area: 2 / 1 / 3 / 2 !important;
+}
+
+.home-map-main-img {
+  grid-column: 2 !important;
+  grid-row: 1 / -1 !important;
+  height: auto;
+  min-height: 0;
+  align-self: center;
+  padding-bottom: 0;
+}
+
+.home-map-main-img-inner {
+  height: auto;
+  min-height: 0;
+}
+
+.home-map-main-img .img-basic {
+  position: static;
+  object-fit: contain;
+  max-height: 42vh;
+  width: 100%;
+  height: auto;
+}
+
+/* the four small plan thumbnails read as a stacked set beside the copy */
+.home-map-main-img-inner .embed-abs,
+.home-map-main-img-inner > svg {
+  max-width: 42rem;
+}
+
+/* Two 100vh rows, so the track is exactly two viewports. The captured 700dvh
+   was sized for the old image-decode animation, which no longer runs — leaving
+   it in place put 500vh of empty scroll under the second heading. */
+.home-map-main {
+  height: 200dvh;
+}
+
+.home-map-main-inner {
+  grid-template-rows: 1fr 1fr;
+  grid-auto-rows: 1fr;
+}
+/* Supporting line under each map heading (mirrors the hero's sub style) */
+.home-intel-label {
+  color: var(--content--primary, #282828);
+  margin-bottom: 1.2rem;
+}
+
+.home-intel-inner .home-intro-partner-item {
+  max-width: 26rem;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+/* --------------------------------------------------------------------------
+ * Page canvas
+ *
+ * The captured sheet never paints an opaque background: `.body` is
+ * `background-color:#0000` and the only fill is the `--bg-img` paper texture,
+ * so the page was relying on the browser's default canvas to be white. In
+ * Safari's dark mode that default is black, and every near-black token in the
+ * site (`--content--primary:#282828`) vanished into it — black on black.
+ *
+ * `color-scheme: light` stops the UA from auto-darkening the canvas, and the
+ * explicit background on html/body keeps it correct even if that is ignored.
+ * -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background-color: var(--helio-paper, #f4f3f0);
+}
+
+.body {
+  background-color: var(--helio-paper, #f4f3f0);
+}
