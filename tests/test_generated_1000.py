@@ -183,8 +183,20 @@ def _check_owner_of(service, _mp) -> None:
     assert r["service"] == service
     assert r["count"] == len(r["rows"])
     for row in r["rows"]:
-        assert set(row) == {"team"}
+        # The handover keys were added because OWNED_BY stops at the Team, so
+        # "who owns payments-gateway today" was unanswerable without them (the
+        # person appears only inside D-21's summary). See OWNERSHIP_HANDOVER in
+        # app/graph.py. All four are None together — a handover is all-or-nothing.
+        assert set(row) == {
+            "team", "ownership_decision", "ownership_summary",
+            "ownership_date", "ownership_author",
+        }
         assert row["team"] in TEAMS
+        handover = (row["ownership_decision"], row["ownership_summary"],
+                    row["ownership_date"], row["ownership_author"])
+        assert (handover == (None, None, None, None)) or all(handover), (
+            f"{service}: partial ownership handover {handover}"
+        )
     for tr in r["trail"]:
         assert set(tr) == TRAIL_KEYS
         assert tr["type"] == "Team"
@@ -245,7 +257,7 @@ def _check_provenance(project, _mp) -> None:
     assert r["count"] == len(r["rows"])
     for row in r["rows"]:
         assert set(row) == {
-            "id", "summary", "date", "status", "evidence",
+            "id", "summary", "date", "status", "author", "evidence",
             "superseded_by", "supersedes_summary", "detail",
         }
         assert re.match(r"^D-\d+$", row["id"]), row["id"]
@@ -305,8 +317,23 @@ def _check_decisions_about(payload, _mp) -> None:
     assert r["count"] == len(r["rows"])
     ids = [row["id"] for row in r["rows"]]
     for row in r["rows"]:
-        assert set(row) == {"id", "summary", "date"}
+        # status/author/superseded_by were added so this call can answer "is it
+        # still current?" and "who decided?" — it used to return only
+        # id/summary/date, which cannot express either question.
+        assert set(row) == {
+            "id", "summary", "date", "status", "author",
+            "superseded_by", "detail",
+        }
         assert row["id"] in DECISIONS
+        assert row["status"] in {"active", "superseded", ""}
+        assert isinstance(row["superseded_by"], list)
+        # A decision that replaced another one is itself active; the two must
+        # not be conflated, or the live decision gets badged as stale.
+        if row["status"] == "active":
+            assert not row["superseded_by"], (
+                f"{row['id']} is active yet names {row['superseded_by']} as "
+                "having replaced it"
+            )
     if required_id is not None:
         assert required_id in ids, f"{required_id} not found by {keyword!r}"
     if expected_count is not None:
@@ -583,6 +610,92 @@ def _gt_ravi_is_platform(_p, _mp):
     assert "Platform" in [row["team"] for row in r["rows"]]
 
 
+# --------------------------------------------------------------------------- #
+# Regressions. Each of these was an observed agent-layer failure: the graph held
+# the fact, the agent never got to see it. They are ground truths in their own
+# right — they assert the DATA is reachable, not that the model reaches it.
+# --------------------------------------------------------------------------- #
+
+def _gt_owner_handover_names_ravi(_p, _mp):
+    """Fact 1 was unreachable: OWNED_BY stops at the Team, and Ravi Menon appears
+    only inside D-21's summary. Asked "who owns payments-gateway today", the agent
+    answered with the team and never named the person."""
+    row = graph.owner_of("payments-gateway")["rows"][0]
+    assert row["ownership_decision"] == "D-21"
+    assert "Ravi Menon" in row["ownership_summary"]
+    assert row["ownership_date"] == "2026-04-15"
+
+
+def _gt_owner_handover_absent_for_static_service(_p, _mp):
+    """A service that never changed hands reports no handover rather than a
+    fabricated one — the absence has to stay an absence."""
+    for row in graph.owner_of("ledger-core")["rows"]:
+        assert row["ownership_decision"] is None
+
+
+def _gt_d14_findable_by_id(_p, _mp):
+    """Fact 13 was unreachable: decisions_about only did summary CONTAINS, so
+    looking D-14 up by id returned nothing and the agent said no such decision
+    existed while it was sitting in the graph marked superseded."""
+    rows = {r["id"]: r for r in graph.decisions_about("D-14")["rows"]}
+    assert "D-14" in rows
+    assert rows["D-14"]["status"] == "superseded"
+    assert rows["D-14"]["superseded_by"] == ["D-19"], (
+        "D-14 must name the decision that replaced it, or 'is D-14 still current' "
+        f"is unanswerable; got {rows['D-14']['superseded_by']}"
+    )
+
+
+def _gt_decision_author_is_authority(_p, _mp):
+    """Fact 14 was unreachable: no traversal exposed Decision.author, so the
+    agent answered a question about decision authority with service owners."""
+    assert all(r["author"] == "Elena Vasquez"
+               for r in graph.provenance(MIGRATION_PROJECT)["rows"])
+    assert all(r["author"] == "Elena Vasquez"
+               for r in graph.decisions_about("payments")["rows"])
+
+
+def _gt_find_documents_accepts_a_phrase(_p, _mp):
+    """Fact 15 was unreachable: 'provider evaluation' — how a person describes a
+    document they cannot name — matched nothing, and the agent reported that no
+    such document existed while two stale ADRs were in the graph."""
+    r = graph.find_documents("provider evaluation")
+    assert r["count"] >= 1
+    names = [row["name"] for row in r["rows"]]
+    assert "payments-provider-eval-v4.md" in names
+    assert all(row["stale"] for row in r["rows"]), "the planted docs are stale"
+    assert any("D-19" in row["cited_by"] for row in r["rows"])
+
+
+def _gt_find_documents_phrase_does_not_dilute_an_exact_hit(_p, _mp):
+    """The word fallback must not replace a precise match: searching 'provider'
+    must report matched_via='provider', not a weaker term."""
+    r = graph.find_documents("provider")
+    assert r["count"] == 2
+    assert {row["matched_via"] for row in r["rows"]} == {"provider"}
+
+
+def _gt_every_service_has_an_owner_except_one(_p, _mp):
+    """Fact 4 needed a whole-set traversal; with only owner_of() the agent would
+    have needed 20 calls, which MAX_TOOL_ROUNDS=6 makes impossible, so it
+    answered 'I do not know whether every service has an owner'."""
+    r = graph.ownership_overview()
+    assert r["count"] == len(SERVICES) == 20, "the rollup must be exhaustive"
+    assert r["unowned"] == ["config-service"]
+    assert r["owned"] == 19
+    assert all(row["owned"] for row in r["rows"] if row["service"] != "config-service")
+
+
+def _gt_current_team_reports_departure(_p, _mp):
+    """Fact 19: the departure lives in `departed`, a sibling of `rows`. run_agent
+    used to send the model only `rows`, so the agent answered 'no current_team
+    edge' about someone who is recorded as having left on 2026-06-30."""
+    r = graph.current_team("Aisha Khan")
+    assert r["rows"] == []
+    assert r["departed"], "the departure must be reported, not just implied"
+    assert any(d["valid_to"] == "2026-06-30" for d in r["departed"])
+
+
 _GROUND_TRUTH = {
     "owner_payments_is_platform": _gt_owner_payments,
     "owner_ledger_is_ledger": _gt_owner_ledger,
@@ -608,6 +721,14 @@ _GROUND_TRUTH = {
     "staleness_flags_provider_doc": _gt_stale_provider_doc,
     "provider_has_d19": _gt_provider_has_d19,
     "ravi_current_team_platform": _gt_ravi_is_platform,
+    "owner_handover_names_ravi": _gt_owner_handover_names_ravi,
+    "owner_handover_absent_for_static_service": _gt_owner_handover_absent_for_static_service,
+    "d14_findable_by_id": _gt_d14_findable_by_id,
+    "decision_author_is_authority": _gt_decision_author_is_authority,
+    "find_documents_accepts_a_phrase": _gt_find_documents_accepts_a_phrase,
+    "find_documents_phrase_no_dilution": _gt_find_documents_phrase_does_not_dilute_an_exact_hit,
+    "every_service_has_an_owner_except_one": _gt_every_service_has_an_owner_except_one,
+    "current_team_reports_departure": _gt_current_team_reports_departure,
 }
 
 
