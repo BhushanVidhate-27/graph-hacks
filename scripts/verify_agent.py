@@ -96,9 +96,32 @@ def ask(base: str, question: str) -> str:
     return answer
 
 
+# The model does not emit ASCII punctuation. A live run answered #18 with
+# "admin<U+2011>bff, config<U+2011>service" — U+2011 NON-BREAKING HYPHEN, not
+# U+002D. Substring-matching that against the ASCII needles in CASES() failed a
+# fact the graph had already proven, which is the worst way for a gate to fail:
+# it reads as a wrong answer and sends you hunting for a bug in the agent.
+#
+# NFKC does NOT fold U+2011 (it is not a compatibility equivalent of "-"), so
+# normalise explicitly. This folds the dash/quote/space variants models actually
+# emit, then lowercases. Substance is unchanged; only typography is.
+_DASHES = dict.fromkeys(map(ord, "\u2010\u2011\u2012\u2013\u2014\u2015\u2212"), "-")
+_QUOTES = {ord("\u2018"): "'", ord("\u2019"): "'", ord("\u201c"): '"', ord("\u201d"): '"'}
+_SPACES = {ord("\u00a0"): " ", ord("\u2009"): " ", ord("\u202f"): " "}
+
+
+def _norm(text: str) -> str:
+    """Case- and typography-insensitive form for substring matching."""
+    return text.translate(_DASHES).translate(_QUOTES).translate(_SPACES).lower()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base-url", default="http://127.0.0.1:8093")
+    # 8080 is the port deploy/docker-compose.yml publishes and the one the
+    # README tells people to open. It used to default to 8093, so running the
+    # gate with no arguments failed all 20 questions with REQUEST FAILED and
+    # looked like a total backend outage rather than a wrong default.
+    ap.add_argument("--base-url", default="http://127.0.0.1:8080")
     args = ap.parse_args()
     base = args.base_url.rstrip("/")
 
@@ -114,9 +137,9 @@ def main() -> int:
             print(f"!! {fact:<3} {question[:44]:<46} REQUEST FAILED")
             continue
 
-        low = answer.lower()
-        missing = [m for m in must if m.lower() not in low]
-        leaked = [f for f in forbidden if f.lower() in low]
+        low = _norm(answer)
+        missing = [m for m in must if _norm(m) not in low]
+        leaked = [f for f in forbidden if _norm(f) in low]
         ok = not missing and not leaked and bool(answer.strip())
 
         if ok:

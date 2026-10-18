@@ -572,6 +572,33 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 # The loop
 # --------------------------------------------------------------------------- #
 
+def _normalise_text(text: str) -> str:
+    """Fold the typography models emit that we do not want to show a judge.
+
+    A live answer came back as "Payments<U+2011>gateway is owned by the
+    Platform team." — U+2011 NON-BREAKING HYPHEN, not U+002D. It renders
+    identically but is a different string, so it breaks exact matching
+    downstream: scripts/verify_agent.py asserted "admin-bff" against an
+    answer containing "admin<U+2011>bff" and failed a fact the graph had
+    already proven. The same trap also silently breaks copy-paste and any
+    judge grepping the output for a service name.
+
+    Typography only, no wording change. NFKC is not enough on its own —
+    U+2011 is not a compatibility equivalent of "-", so it survives — hence
+    the explicit table.
+    """
+    return (
+        text.translate(_DASH_FOLD)
+        .translate({"’": "'", "‘": "'", "“": '"', "”": '"'})
+        .translate({" ": " ", " ": " ", " ": " "})
+    )
+
+
+_DASH_FOLD = dict.fromkeys(
+    map(ord, "\u2010\u2011\u2012\u2013\u2014\u2015\u2212"), "-"
+)
+
+
 def _clients() -> list[anthropic.Anthropic]:
     """One client per configured key, in chain order."""
     keys = _key_chain()
@@ -619,9 +646,11 @@ def run_agent(question: str) -> dict[str, Any]:
         messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason != "tool_use":
-            answer = "".join(
-                block.text for block in response.content if block.type == "text"
-            ).strip()
+            answer = _normalise_text(
+                "".join(
+                    block.text for block in response.content if block.type == "text"
+                ).strip()
+            )
             return {"answer": answer, "trail": trail, "stale": list(stale.values())}
 
         # The model chose one or more tools. Run them and hand the results back.
