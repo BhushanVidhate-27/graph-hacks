@@ -390,7 +390,15 @@ export const ChatWidgetSimulator: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const liveAbortController = useRef<AbortController | null>(null);
 
-  const API_BASE = ((import.meta as any).env?.VITE_API_URL as string) || 'https://helio-brain.onrender.com';
+  const API_BASE = (() => {
+    if ((import.meta as any).env?.VITE_API_URL) {
+      return (import.meta as any).env.VITE_API_URL as string;
+    }
+    if (typeof window !== 'undefined' && window.location.hostname === 'helio-brain.onrender.com') {
+      return '';
+    }
+    return 'https://helio-brain.onrender.com';
+  })();
 
   // Check live backend connectivity on mount
   useEffect(() => {

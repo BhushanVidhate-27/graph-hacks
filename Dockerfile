@@ -25,23 +25,21 @@ WORKDIR /srv
 # applies and no proxy sits between the page and the SSE stream. Do NOT set it to
 # the public API URL here — that reintroduces a cross-origin request from a page
 # served by that very same host.
-# same host.
-FROM node:24.14.1-slim AS site
-
-# Set to empty ON PURPOSE — see the note above.
-ENV NEXT_TELEMETRY_DISABLED=1 \
-    NEXT_PUBLIC_HELIO_API=""
+# --------------------------------------------------------------------------- #
+# Stage 1: build the Helio CAD HUD frontend (angy-fronted).
+#
+# angy-fronted is a Vite + React application. Building here and copying dist/ into
+# the Python stage keeps the served site and the served API on ONE origin, which
+# removes CORS and proxy buffering issues completely.
+FROM node:22-slim AS site
 
 WORKDIR /site
 
-# Lockfile first so a source-only edit does not re-run npm ci.
-COPY front/package.json front/package-lock.json ./
+# Lockfile first so source edits do not re-run npm ci.
+COPY angy-fronted/package.json angy-fronted/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-COPY front/ ./
-
-# `prepare: husky` runs on npm ci above. It is a no-op without a .git (the
-# context has none), so no --ignore-scripts is needed here.
+COPY angy-fronted/ ./
 RUN npm run build
 
 # --------------------------------------------------------------------------- #
@@ -60,9 +58,8 @@ COPY data/ ./data/
 # with "can't open file '/srv/scripts/generate.py'".
 COPY scripts/ ./scripts/
 
-# The exported site, mounted at / by app.serve. Copies `out/` only — the source
-# and node_modules stay in the builder stage.
-COPY --from=site /site/out ./site/
+# The exported site (Vite dist), mounted at / by app.serve.
+COPY --from=site /site/dist ./site/
 
 EXPOSE 8080
 

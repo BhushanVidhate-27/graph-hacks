@@ -78,8 +78,15 @@ class SiteFiles(StaticFiles):
             if html_stat and stat.S_ISREG(html_stat.st_mode):
                 return self.file_response(html_full, html_stat, scope)
 
-        # Rule 2: hand back to StaticFiles with the result it would have found.
-        return await super().get_response(path, scope)
+        # Rule 2: hand back to StaticFiles. If 404, fall back to index.html for SPA routing.
+        response = await super().get_response(path, scope)
+        if response.status_code == 404:
+            index_full, index_stat = await anyio.to_thread.run_sync(
+                self.lookup_path, "index.html"
+            )
+            if index_stat and stat.S_ISREG(index_stat.st_mode):
+                return self.file_response(index_full, index_stat, scope)
+        return response
 
 
 # mock/ is mounted SEPARATELY and at the root. The frontend loads its fixture at

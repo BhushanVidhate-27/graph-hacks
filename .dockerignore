@@ -36,6 +36,8 @@ front/.husky/
 front/.playwright-mcp/
 front/artifacts/
 front/temp/
+angy-fronted/node_modules/
+angy-fronted/dist/
 
 # Per-agent instruction folders that ship with the frontend template. They are
 # committed so a teammate's editor config travels with the tree, but they have
