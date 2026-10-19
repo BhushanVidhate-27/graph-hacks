@@ -20,8 +20,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import ssl
 import sys
 import urllib.request
+
+try:
+    import certifi
+    _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    _SSL_CTX = None
 
 # (fact, question, [substrings that must ALL appear], [substrings that must appear NOWHERE])
 #
@@ -136,7 +143,7 @@ def ask(base: str, question: str) -> str:
         method="POST",
     )
     answer, buf = "", b""
-    with urllib.request.urlopen(req, timeout=240) as resp:
+    with urllib.request.urlopen(req, timeout=240, context=_SSL_CTX) as resp:
         while chunk := resp.read(4096):
             buf += chunk
     for line in buf.decode(errors="replace").splitlines():

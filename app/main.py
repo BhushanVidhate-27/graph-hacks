@@ -336,8 +336,11 @@ app = FastAPI(title="Helio company brain", version="0.1.0")
 _DEFAULT_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://helio-front.onrender.com",
 ]
 _EXTRA = [o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()]
 ALLOWED_ORIGINS = _DEFAULT_ORIGINS + _EXTRA
@@ -345,6 +348,7 @@ ALLOWED_ORIGINS = _DEFAULT_ORIGINS + _EXTRA
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

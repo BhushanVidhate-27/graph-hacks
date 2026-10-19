@@ -697,13 +697,27 @@ def _normalise_text(text: str) -> str:
     """
     return (
         text.translate(_DASH_FOLD)
-        .translate({"’": "'", "‘": "'", "“": '"', "”": '"'})
-        .translate({" ": " ", " ": " ", " ": " "})
+        .translate(_QUOTES_FOLD)
+        .translate(_SPACES_FOLD)
     )
 
 
 _DASH_FOLD = dict.fromkeys(
     map(ord, "\u2010\u2011\u2012\u2013\u2014\u2015\u2212"), "-"
+)
+_QUOTES_FOLD = {
+    ord("’"): "'",
+    ord("‘"): "'",
+    ord("“"): '"',
+    ord("”"): '"',
+    ord("`"): "'",
+}
+_SPACES_FOLD = dict.fromkeys(
+    map(
+        ord,
+        "\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u200b\u2028\u2029\u202f\u205f\u3000\ufeff",
+    ),
+    " ",
 )
 
 

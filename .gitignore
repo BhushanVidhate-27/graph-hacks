@@ -32,3 +32,4 @@ dist/
 # snapshot per navigation; eight of them were committed by accident and they say
 # nothing about the product.
 .playwright-mcp/
+.opencode/

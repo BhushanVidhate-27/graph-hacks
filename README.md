@@ -249,6 +249,10 @@ a cold start takes about 22 seconds. The first request after a gap is slow.
 consecutive runs are byte-identical — which is what makes the ground-truth
 verification honest. It is not designed for concurrent writers.
 
+**REA's frame grouping is shallow-unaware.** `rea/` groups SSE frames by full
+nested shape, so the same event sent with different payload sizes can surface as
+several frame types. Documented in `docs/rea.md` rather than silently wrong.
+
 **Entity resolution is lexical.** `resolve_service()` maps *"the payments service"* →
 `payments-gateway` by stripping generic suffixes and matching tokens. It returns the
 original string when nothing matches confidently, so unknown services still produce
@@ -271,6 +275,7 @@ honest negatives. It will not resolve *"the thing that handles money"* to
 | `app/serve.py` | Bhushan | single-origin production entrypoint |
 | `web/` · `mock/` | Ujwal | frontend, shared fixture |
 | `deploy/` | Bhushan | compose |
+| `rea/` · `docs/rea.md` | Bhushan | reverse-engineer any target into a frontend-ready contract |
 
 ---
 
