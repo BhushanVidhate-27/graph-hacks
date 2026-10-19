@@ -5,44 +5,44 @@ export const ProblemsSection: React.FC = () => {
   const problems = [
     {
       index: '[01]',
-      label: 'MANUAL',
-      title: 'Every change is on you',
-      desc: "You make each edit by hand, one at a time, even the ones you've done a hundred times before."
+      label: 'VOLUME TRAP',
+      title: 'Priya Sharma left in April',
+      desc: "Priya has 14 commits on payments-gateway — the most. A single 'ORDER BY count DESC' returns her, technically correct on volume but wrong on recency. Helio returns both signals: Ask Ravi Menon."
     },
     {
       index: '[02]',
-      label: 'DISJOINTED',
-      title: 'AI help sits outside your model',
-      desc: "Generic AI tools can't see your project, so you keep copying, pasting, and re-explaining the same context."
+      label: 'CONTRADICTION',
+      title: 'Stripe vs. Adyen decision conflict',
+      desc: "A March doc says 'single provider, Stripe.' May Decision D-19 says 'dual provider, Adyen primary, Stripe fallback.' Without a SUPERSEDES edge, search engines present stale docs as current truth."
     },
     {
       index: '[03]',
-      label: 'BLIND',
-      title: 'Nothing watches for problems',
-      desc: 'Issues sit quietly in your model until you happen to spot them, if you spot them at all.'
+      label: 'BLAST RADIUS',
+      title: 'Cascading midnight failures',
+      desc: "When a core service degrades, text search cannot trace downstream blast radius. Helio walks HAS_DEPENDENT edges to identify exact hop depth, owning teams, and on-call engineers."
     },
     {
       index: '[04]',
-      label: 'SLOW',
-      title: 'Small tasks pile up into lost days',
-      desc: 'The fiddly work that fills your week is exactly the work software should be doing for you.'
+      label: 'HALLUCINATION',
+      title: 'Invents owners when none exist',
+      desc: "An LLM asked 'who owns config-service?' invents a plausible team. Helio traverses FalkorDB, detects no OWNED_BY edge, and states with confidence: 'No team owns it.' Truth, not an apology."
     }
   ];
 
   return (
-    <section className="relative w-full py-16 md:py-24 px-4 md:px-8 max-w-7xl mx-auto select-none">
+    <section id="problems-section" className="relative w-full py-16 md:py-24 px-4 md:px-8 max-w-7xl mx-auto select-none">
       
       {/* Section Header */}
       <div className="mb-12 max-w-2xl">
         <div className="text-[#e15c46] font-mono text-xs font-bold uppercase tracking-widest mb-2">
-          PROBLEMS // THE CURRENT REALITY
+          THE 4 FAILURE MODES // WHY FLAT SEARCH FAILS
         </div>
         <h2 className="text-3xl md:text-5xl font-mono font-bold tracking-tight text-[#282828] uppercase leading-tight">
-          Your design tools do what you tell them, nothing more.
+          Enterprise search tells you where documents live, not what is true.
         </h2>
         <p className="mt-4 text-sm md:text-base font-mono text-[#5c5c56]">
-          Design software is powerful but passive. It waits for every instruction, gives no advice,
-          and can't act on its own, so all the repetitive work stays on you.
+          A hallucinated ownership chain looks exactly like a correct one because both are plausible prose.
+          Helio replaces probabilistic guessing with deterministic Cypher traversals over real organizational edges.
         </p>
       </div>
 

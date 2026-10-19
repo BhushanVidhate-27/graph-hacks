@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Terminal, Activity, ShieldCheck, Cpu } from 'lucide-react';
+import { Terminal, Database, ShieldCheck, Share2 } from 'lucide-react';
 
 export const LiveCoordinatesHUD: React.FC = () => {
-  const [coords, setCoords] = useState<{ x: number; y: number }>({ x: 1131, y: 1131 });
+  const [coords, setCoords] = useState<{ x: number; y: number }>({ x: 1042, y: 780 });
   const [activeStep, setActiveStep] = useState(8);
 
   useEffect(() => {
@@ -22,40 +22,40 @@ export const LiveCoordinatesHUD: React.FC = () => {
   }, []);
 
   const systemDiagnostics = [
-    "001 INITIALIZE CORE SYSTEM",
-    "002 LOAD AI MODELS",
-    "003 CONFIGURE DATA PIPELINES",
-    "004 SYNC DISTRIBUTED NODES",
-    "005 VALIDATE INPUT STREAMS",
-    "006 OPTIMIZE INFERENCE ENGINE",
-    "007 DEPLOY TEST ENVIRONMENT",
-    "008 ENABLE REAL-TIME PROCESSING",
-    "009 RUN DIAGNOSTICS",
-    "010 START EXECUTION"
+    "001 CONNECT TO FALKORDB ENGINE",
+    "002 INDEX :Service(name) :Person(name)",
+    "003 TRAVERSE HAS_DEPENDENT HIERARCHY",
+    "004 EVALUATE 90-DAY EDGE FRESHNESS",
+    "005 RESOLVE PROVENANCE VIA SUPERSEDES",
+    "006 DETECT EXPERTISE DECAY (PRIYA VS RAVI)",
+    "007 AUDIT UNOWNED SERVICES (CONFIG-SERVICE)",
+    "008 EXECUTE MULTI-HOP BLAST RADIUS",
+    "009 VERIFY 20 GROUND TRUTH CONTRACTS",
+    "010 SYSTEM READY // FALKORDB ONLINE"
   ];
 
   return (
-    <div className="w-full cad-border-b bg-[#ecece4]/90 backdrop-blur-sm text-[11px] font-mono text-[#282828] select-none py-2 px-4 md:px-8">
+    <div className="w-full cad-border-b bg-[#ecece4]/95 backdrop-blur-sm text-[11px] font-mono text-[#282828] select-none py-2 px-4 md:px-8">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-y-2 gap-x-6">
         
         {/* Left: Metadata & Type */}
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-1.5 text-[#e15c46] font-bold">
             <span className="w-2 h-2 rounded-full bg-[#e15c46] animate-pulse inline-block" />
-            <span>HERON // BIM-AI v2.6</span>
+            <span>HELIO // GRAPH-BRAIN v3.0</span>
           </div>
           <span className="text-[#282828]/40 hidden md:inline">|</span>
           <div className="hidden lg:flex items-center gap-3 text-[#5c5c56]">
-            <span>TYPE: AI/CAD Integration</span>
+            <span>ENGINE: FalkorDB (Cypher)</span>
             <span>•</span>
-            <span>FOCUS: IBC & ADA Compliance</span>
+            <span>TOPOLOGY: 120 Persons · 20 Services · 5 Teams</span>
           </div>
         </div>
 
         {/* Center: Live Terminal Diagnostic Status */}
         <div className="hidden md:flex items-center gap-2 text-[#282828]">
           <Terminal className="w-3.5 h-3.5 text-[#e15c46]" />
-          <span className="text-[#e15c46] font-bold">SYS:</span>
+          <span className="text-[#e15c46] font-bold">CYPHER:</span>
           <span className="tracking-tight font-medium text-[#282828]/90">
             {systemDiagnostics[activeStep - 1]}
           </span>
@@ -75,7 +75,7 @@ export const LiveCoordinatesHUD: React.FC = () => {
 
           <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-[#5c5c56]">
             <ShieldCheck className="w-3 h-3 text-[#e15c46]" />
-            <span>IBC 2024 READY</span>
+            <span>20/20 GROUND TRUTH VERIFIED</span>
           </div>
         </div>
 

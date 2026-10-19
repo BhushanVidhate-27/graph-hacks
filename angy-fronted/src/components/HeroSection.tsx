@@ -1,7 +1,7 @@
 import React from 'react';
 import { HeronButton } from './HeronButton';
 import { CadCrosshair } from './CadCrosshair';
-import { ArrowDown, Box, Cpu, FileCheck2, Sparkles, Workflow } from 'lucide-react';
+import { ArrowDown, Network, ShieldCheck, GitBranch, Cpu, AlertOctagon } from 'lucide-react';
 import { ViewMode } from '../types';
 
 interface HeroSectionProps {
@@ -16,7 +16,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSelectMode, onNaviga
       {/* Top Banner Tag */}
       <div className="flex items-center gap-3 font-mono text-[11px] text-[#e15c46] font-bold uppercase tracking-wider mb-6">
         <span className="w-2.5 h-2.5 bg-[#e15c46]" />
-        <span>REPRESENTING NEXT-GEN AUTONOMOUS CAD / BIM AGENTS</span>
+        <span>TRACK 03 // GRAPH HACKS · COMPANY BRAIN PLATFORM</span>
       </div>
 
       {/* Hero Grid Container */}
@@ -25,14 +25,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSelectMode, onNaviga
         {/* Left 8 Cols: Massive Headline */}
         <div className="lg:col-span-8">
           <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-mono font-bold tracking-tighter text-[#282828] uppercase leading-[0.95]">
-            Works inside<br />
-            your design<br />
-            <span className="text-[#e15c46]">tools.</span>
+            Know what breaks.<br />
+            Before it dies.<br />
+            <span className="text-[#e15c46]">In one traversal.</span>
           </h1>
 
           <div className="mt-8 max-w-2xl text-[14px] md:text-[16px] font-mono text-[#5c5c56] leading-relaxed">
-            Heron sees your model, spots building code issues, and suggests fixes as you design.
-            When you approve, it makes the edit itself — all without leaving the software you already use.
+            Existing enterprise search answers <span className="text-[#282828] font-bold">"where is the doc about X."</span> Helio
+            answers <span className="text-[#282828] font-bold">who knows about X, what breaks if it goes down, where was that decided, and how current is that answer</span> —
+            in one deterministic Cypher traversal, with the complete path shown. Text search is used only at the leaves.
           </div>
 
           <div className="mt-8 flex flex-wrap gap-4 items-center">
@@ -41,7 +42,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSelectMode, onNaviga
               size="lg" 
               onClick={() => onSelectMode('chat-widget')}
             >
-              Test In-Tool Plugin
+              Ask Helio Agent
             </HeronButton>
 
             <HeronButton 
@@ -49,7 +50,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSelectMode, onNaviga
               size="lg" 
               onClick={() => onNavigateSection('inspector-section')}
             >
-              Inspect Model Violations
+              Inspect Blast Radius
             </HeronButton>
 
             <HeronButton 
@@ -57,7 +58,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSelectMode, onNaviga
               size="lg" 
               onClick={() => onSelectMode('dashboard')}
             >
-              Launch Dashboard
+              FalkorDB Console
             </HeronButton>
           </div>
         </div>
@@ -70,39 +71,47 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSelectMode, onNaviga
           <CadCrosshair position="br" />
 
           <div className="font-mono text-[11px] text-[#5c5c56] uppercase tracking-wider mb-4 cad-border-b pb-3 flex justify-between items-center">
-            <span>SPECIFICATION // v2.6</span>
-            <span className="text-[#e15c46] font-bold">ONLINE</span>
+            <span>GROUND TRUTH BENCHMARK</span>
+            <span className="text-[#e15c46] font-bold">20/20 PASSED</span>
           </div>
 
           <div className="space-y-4 font-mono text-[12px]">
             <div className="flex items-start gap-3">
-              <Box className="w-4 h-4 text-[#e15c46] flex-shrink-0 mt-0.5" />
+              <Network className="w-4 h-4 text-[#e15c46] flex-shrink-0 mt-0.5" />
               <div>
-                <div className="font-bold text-[#282828]">FASTER ITERATIONS</div>
-                <div className="text-[11px] text-[#5c5c56]">Bypass repetitive drafting bottlenecks in real-time.</div>
+                <div className="font-bold text-[#282828]">BLAST RADIUS TRAVERSAL</div>
+                <div className="text-[11px] text-[#5c5c56]">Walks HAS_DEPENDENT with hop depth, owning team & on-call engineer.</div>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
-              <FileCheck2 className="w-4 h-4 text-[#e15c46] flex-shrink-0 mt-0.5" />
+              <GitBranch className="w-4 h-4 text-[#e15c46] flex-shrink-0 mt-0.5" />
               <div>
-                <div className="font-bold text-[#282828]">FEWER MISTAKES</div>
-                <div className="text-[11px] text-[#5c5c56]">Continuous IBC 2024 and ADA geometric audits.</div>
+                <div className="font-bold text-[#282828]">EXPERTISE VOLUME VS RECENCY</div>
+                <div className="text-[11px] text-[#5c5c56]">Reports both signals separately — never returns departed employees like Priya.</div>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
-              <Workflow className="w-4 h-4 text-[#e15c46] flex-shrink-0 mt-0.5" />
+              <ShieldCheck className="w-4 h-4 text-[#e15c46] flex-shrink-0 mt-0.5" />
               <div>
-                <div className="font-bold text-[#282828]">LESS BUSYWORK</div>
-                <div className="text-[11px] text-[#5c5c56]">Approve suggested changes and watch CAD auto-edit.</div>
+                <div className="font-bold text-[#282828]">SUPERSEDES PROVENANCE</div>
+                <div className="text-[11px] text-[#5c5c56]">D-19 shows as overriding old March docs: Adyen primary, Stripe fallback.</div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <AlertOctagon className="w-4 h-4 text-[#e15c46] flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold text-[#282828]">HONEST NEGATIVES</div>
+                <div className="text-[11px] text-[#5c5c56]">5 questions have no answer in the graph. Helio states it plainly instead of hallucinating.</div>
               </div>
             </div>
           </div>
 
           <div className="mt-6 pt-4 cad-border-t text-[10px] font-mono text-[#5c5c56] flex items-center justify-between">
-            <span>NATIVE API HOOKS:</span>
-            <span className="text-[#282828] font-bold">REVIT • RHINO • ARCHICAD</span>
+            <span>GRAPH INFRASTRUCTURE:</span>
+            <span className="text-[#282828] font-bold">FALKORDB + CYPHER</span>
           </div>
         </div>
 
@@ -112,15 +121,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSelectMode, onNaviga
       <div className="pt-6 flex flex-wrap items-center justify-between gap-4 font-mono text-xs text-[#5c5c56]">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 bg-[#282828]" />
-          <span className="font-bold text-[#282828]">COMPATIBLE ECOSYSTEM:</span>
-          <span>Autodesk Revit 2021–2025, McNeel Rhino 7/8, Graphisoft ArchiCAD, Trimble SketchUp</span>
+          <span className="font-bold text-[#282828]">ORGANIZATIONAL TOPOLOGY:</span>
+          <span>Helio Fintech · 120 Persons · 5 Teams · 20 Services · 40 Decisions · 2,000 Messages</span>
         </div>
 
         <button 
           onClick={() => onNavigateSection('inspector-section')}
           className="flex items-center gap-1.5 text-[#e15c46] hover:underline"
         >
-          <span>SCROLL TO EXPLORE</span>
+          <span>INTERACTIVE BLAST RADIUS</span>
           <ArrowDown className="w-3.5 h-3.5" />
         </button>
       </div>

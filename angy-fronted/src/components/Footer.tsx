@@ -1,7 +1,7 @@
 import React from 'react';
-import { HeronLogo } from './HeronLogo';
+import { HelioLogo } from './HelioLogo';
 import { CadCrosshair } from './CadCrosshair';
-import { ExternalLink, ArrowUpRight } from 'lucide-react';
+import { ExternalLink, ArrowUpRight, GitBranch } from 'lucide-react';
 import { ViewMode } from '../types';
 
 interface FooterProps {
@@ -18,31 +18,32 @@ export const Footer: React.FC<FooterProps> = ({ onSelectMode }) => {
           
           {/* Col 1-5: Brand & Mission */}
           <div className="lg:col-span-5 space-y-6">
-            <HeronLogo showText={true} />
+            <HelioLogo showText={true} />
             <p className="font-mono text-xs text-[#5c5c56] max-w-sm leading-relaxed">
-              Heron AI is an autonomous BIM agent operating natively inside Revit, Rhino, ArchiCAD, and SketchUp.
-              Designed for continuous building code compliance and precision model edits.
+              Helio is an organizational knowledge graph engine built on FalkorDB.
+              Answering who knows what, what breaks if it dies, and where decisions were made —
+              with complete Cypher provenance and zero hallucination.
             </p>
 
             <div className="bg-[#ecece4] cad-border p-4 text-[11px] font-mono text-[#5c5c56] space-y-1">
-              <div className="text-[#282828] font-bold">OFFICES:</div>
-              <div>1801 California St. Suite 2400, Denver, CO 80202</div>
-              <div>60 Martin Pl, Sydney, NSW 2000, Australia</div>
-              <div className="text-[#e15c46] pt-1 font-bold">CONTACT: hello@heronaiapp.com</div>
+              <div className="text-[#282828] font-bold">PROJECT METRICS:</div>
+              <div>Synthetic Fintech Topology: 120 Persons · 5 Teams · 20 Services</div>
+              <div>Ground Truth Verification: 20 Hand-Crafted Planted Facts (100% Pass)</div>
+              <div className="text-[#e15c46] pt-1 font-bold">ENGINE: FalkorDB · Cypher · FastAPI</div>
             </div>
           </div>
 
           {/* Col 6-7: Product */}
           <div className="lg:col-span-2 space-y-3 font-mono text-xs">
             <div className="text-[#282828] font-bold uppercase tracking-wider mb-2">
-              PRODUCT
+              INTERFACES
             </div>
             <div>
               <button 
                 onClick={() => onSelectMode('chat-widget')} 
                 className="hover:text-[#e15c46] transition-colors"
               >
-                Heron Chat Widget
+                Cypher Agent
               </button>
             </div>
             <div>
@@ -50,49 +51,54 @@ export const Footer: React.FC<FooterProps> = ({ onSelectMode }) => {
                 onClick={() => onSelectMode('dashboard')} 
                 className="hover:text-[#e15c46] transition-colors"
               >
-                Heron Dashboard
+                FalkorDB Console
               </button>
             </div>
             <div>
-              <a href="#pricing-section" className="hover:text-[#e15c46] transition-colors">
-                Pricing Plans
+              <a href="#inspector-section" className="hover:text-[#e15c46] transition-colors">
+                Blast Radius Map
               </a>
             </div>
             <div>
-              <a href="#inspector-section" className="hover:text-[#e15c46] transition-colors">
-                CAD Inspector
+              <a href="#problems-section" className="hover:text-[#e15c46] transition-colors">
+                The 4 Failure Traps
               </a>
             </div>
           </div>
 
-          {/* Col 8-9: Ecosystem */}
+          {/* Col 8-9: Schema & Graph */}
           <div className="lg:col-span-2 space-y-3 font-mono text-xs">
             <div className="text-[#282828] font-bold uppercase tracking-wider mb-2">
-              ECOSYSTEM
+              GRAPH SCHEMA
             </div>
-            <div className="text-[#5c5c56]">Autodesk Revit</div>
-            <div className="text-[#5c5c56]">McNeel Rhino</div>
-            <div className="text-[#5c5c56]">Graphisoft ArchiCAD</div>
-            <div className="text-[#5c5c56]">Trimble SketchUp</div>
-            <div className="text-[#5c5c56]">Speckle / IFC.js</div>
+            <div className="text-[#5c5c56]">HAS_DEPENDENT</div>
+            <div className="text-[#5c5c56]">SUPERSEDES</div>
+            <div className="text-[#5c5c56]">OWNED_BY</div>
+            <div className="text-[#5c5c56]">ON_CALL</div>
+            <div className="text-[#5c5c56]">CONTRIBUTED_TO</div>
           </div>
 
-          {/* Col 10-12: Design Credits & Recognition */}
+          {/* Col 10-12: Hackathon & Recognition */}
           <div className="lg:col-span-3 space-y-3 font-mono text-xs">
             <div className="text-[#282828] font-bold uppercase tracking-wider mb-2">
-              RECOGNITION
+              TRACK 03: GRAPH HACKS
             </div>
             <p className="text-[#5c5c56] text-[11px] leading-relaxed">
-              Crafted as an architectural showcase inspired by the Awwwards Site of the Day by Bearplus Agency.
+              Company Brain Track · Built for Graph Hacks with ground truth-first architecture.
             </p>
             <div className="flex flex-col gap-1.5 pt-2 text-[11px] font-bold">
+              <a 
+                href="https://github.com/BhushanVidhate-27/graph-hacks-company-brain" 
+                target="_blank" 
+                rel="noreferrer"
+                className="text-[#282828] hover:text-[#e15c46] flex items-center gap-1.5 transition-colors"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                <span>GITHUB REPOSITORY</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </a>
               <span className="text-[#e15c46] flex items-center gap-1">
-                <span>AWWWARDS SITE OF THE DAY</span>
-                <ArrowUpRight className="w-3 h-3" />
-              </span>
-              <span className="text-[#282828] flex items-center gap-1">
-                <span>FWA OF THE DAY WINNER</span>
-                <ArrowUpRight className="w-3 h-3" />
+                <span>FALKORDB CERTIFIED PASS</span>
               </span>
             </div>
           </div>
@@ -102,14 +108,14 @@ export const Footer: React.FC<FooterProps> = ({ onSelectMode }) => {
         {/* Bottom Bar */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-[11px] text-[#5c5c56]">
           <div>
-            © 2026 HERON AI. ALL RIGHTS RESERVED.
+            © 2026 HELIO — A COMPANY BRAIN. ALL RIGHTS RESERVED.
           </div>
           <div className="flex items-center gap-6">
-            <span className="hover:text-[#282828] cursor-pointer">PRIVACY POLICY</span>
+            <span>GROUND_TRUTH.MD</span>
             <span>•</span>
-            <span className="hover:text-[#282828] cursor-pointer">TERMS & CONDITIONS</span>
+            <span>SCHEMA.MD</span>
             <span>•</span>
-            <span className="hover:text-[#282828] cursor-pointer">COOKIE POLICY</span>
+            <span>FALKORDB CYPHER</span>
           </div>
         </div>
 

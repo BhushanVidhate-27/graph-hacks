@@ -9,33 +9,33 @@ export const FAQSection: React.FC = () => {
   const faqs: FAQItem[] = [
     {
       id: 'faq1',
-      question: 'Does Heron change my model without asking?',
+      question: 'Why is a graph traversal better than vector search or RAG?',
       answer:
-        'No. Heron always shows you the proposed edit first and waits for your approval. Nothing lands in your model until you say yes, and every edit can be rolled back with standard Undo commands.'
+        'Vector search checks semantic similarity between text chunks. It cannot tell if Priya left the company 6 months ago, cannot compute a 3-hop dependency cascade, and treats superseded docs as equally valid. Helio uses FalkorDB to traverse real organizational edges with temporal properties, using text search only at the leaves.'
     },
     {
       id: 'faq2',
-      question: 'Which design tools does Heron Chat work in?',
+      question: 'How does Helio prevent the LLM from hallucinating ownership?',
       answer:
-        'Revit, Rhino, ArchiCAD, and SketchUp, with more on the way. It keeps your geometric and rule context as you move between them.'
+        'The agent is strictly bounded by Cypher query results. If a service like config-service has no OWNED_BY edge in the graph, the agent receives an explicit empty set and returns: "The graph contains no OWNED_BY edge. No team owns it." 5 of our 20 ground-truth questions have no answer in the graph, and Helio passes all 5.'
     },
     {
       id: 'faq3',
-      question: 'Can it see my whole project or just the open view?',
+      question: 'How is the Priya Sharma volume vs. recency trap resolved?',
       answer:
-        'Heron reads the whole project database for the file you are working in. Its answers and edits match your real 3D geometry and spatial parameters, not a generic example.'
+        'Priya Sharma has 14 commits on payments-gateway — the highest in the company. A naive ORDER BY count DESC returns her, even though she left in April. Helio returns volume and recency as two distinct signals: "Ravi Menon has worked on it most recently (2026-09-28). Priya Sharma has the most commits (14), but her last touch was 2026-04-15 and is flagged as stale. Ask Ravi Menon."'
     },
     {
       id: 'faq4',
-      question: "What if I don't like a change it made?",
+      question: 'How are conflicting decisions handled (Stripe vs. Adyen)?',
       answer:
-        'Every edit is executed as a named transaction (e.g. "Heron: Door Swing Inversion") and can be instantly undone or rolled back from the history log.'
+        'Helio models architectural decisions with SUPERSEDES edges. A March doc says "single provider, Stripe." Decision D-19 (2026-05-06) established "dual provider, Adyen primary, Stripe fallback." Because D-19 supersedes the earlier doc, the graph proves the March document is obsolete.'
     },
     {
       id: 'faq5',
-      question: 'Do I need to learn special commands or scripting?',
+      question: 'Which graph database powers Helio and how is it deployed?',
       answer:
-        'No. Talk to Heron in everyday architectural language ("Shift room partition 6 inches east to satisfy IBC 1017"). Heron parses the geometric intent and maps it to native CAD elements.'
+        'Helio runs on FalkorDB (Cypher query language). The entire system runs via Docker Compose with synthetic seed generation, automated schema indexing, and a single-origin API entrypoint.'
     }
   ];
 
@@ -44,10 +44,10 @@ export const FAQSection: React.FC = () => {
       
       <div className="mb-12 max-w-2xl">
         <div className="text-[#e15c46] font-mono text-xs font-bold uppercase tracking-widest mb-2">
-          FAQS // FREQUENTLY ASKED QUESTIONS
+          FAQS // GROUND TRUTH & ARCHITECTURE
         </div>
         <h2 className="text-3xl md:text-5xl font-mono font-bold tracking-tight text-[#282828] uppercase leading-tight">
-          Got Questions? We've Got Answers.
+          Got Questions? We've Got Verified Answers.
         </h2>
       </div>
 

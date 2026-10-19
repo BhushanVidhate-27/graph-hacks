@@ -10,70 +10,70 @@ export const PricingSection: React.FC = () => {
   const plans: PricingPlan[] = [
     {
       id: 'free',
-      name: 'Free',
-      tagline: "For individuals exploring Heron's chat and suggestions.",
+      name: 'Developer',
+      tagline: 'For individuals and small open-source repos exploring graph traversals.',
       priceMonthly: 0,
       priceYearly: 0,
-      credits: '500 credits / month',
+      credits: 'Up to 10 microservices',
       features: [
-        'Chat widget: ask about your model',
-        'Single active CAD project',
-        'Basic building code queries',
-        'Community support',
-        'Standard latency'
+        'Local FalkorDB container support',
+        'Basic Cypher natural language queries',
+        'Ground truth fact evaluation',
+        'Community Discord access',
+        'Standard traversal speed'
       ],
-      cta: 'Get Started'
+      cta: 'Start Free'
     },
     {
       id: 'standard',
-      name: 'Standard',
-      tagline: 'For individuals and small firms ready to let Heron edit inside Revit.',
+      name: 'Team',
+      tagline: 'For fast-growing engineering teams managing distributed services.',
       priceMonthly: 99,
       priceYearly: 90,
-      credits: '5,000 credits / month',
+      credits: 'Up to 50 microservices',
       highlighted: true,
       features: [
-        'In-tool agent in Revit & Rhino',
-        'Suggestions as you design',
-        'Direct edit on approval',
-        'Unlimited active projects',
-        'Learns basic firm standards',
-        'Email support'
+        'Helio Cypher Natural Language Agent',
+        'Automated blast radius calculation',
+        'Live on-call rotation synchronization',
+        'Slack & PagerDuty notification hooks',
+        'Expertise volume vs. recency weighting',
+        'Email & Slack support'
       ],
-      cta: 'Start Free Trial'
+      cta: 'Start 14-Day Trial'
     },
     {
       id: 'business',
-      name: 'Business',
-      tagline: 'For medium firms and collaborative, multi-office teams.',
+      name: 'Scale',
+      tagline: 'For multi-team engineering organizations needing full architectural provenance.',
       priceMonthly: 295,
       priceYearly: 290,
-      credits: '50,000 credits / month',
+      credits: 'Unlimited microservices',
       features: [
-        'Everything in Standard',
-        'Heron Dashboard web oversight',
-        'Team view & shared approvals',
-        'Firm standards knowledge RAG',
-        'Admin, SSO & audit logs',
-        'API & model data export',
-        'Email & live chat support'
+        'Everything in Team',
+        'Helio FalkorDB Web Console',
+        'Automated 90-day staleness decay alerts',
+        'SUPERSEDES architectural decision audit',
+        'Audit logs & honest negative detection',
+        'API & Cypher query export',
+        'Priority support'
       ],
-      cta: 'Contact Sales'
+      cta: 'Deploy Scale'
     },
     {
       id: 'enterprise',
       name: 'Enterprise',
-      tagline: 'For large firms, universities, and multi-office deployments.',
+      tagline: 'For security-sensitive fintechs and enterprises needing airgapped compliance.',
       priceMonthly: 0,
       priceYearly: 0,
-      credits: 'Custom credits allocation',
+      credits: 'Custom dedicated nodes',
       features: [
-        'Custom local LLM deployment option',
-        'Unlimited seats & enterprise SSO',
-        'Dedicated BIM integration specialist',
-        'Custom code amendments training',
-        'Strict private cloud / on-premise SLA',
-        '24/7 dedicated support'
+        'On-premise airgapped FalkorDB cluster',
+        'Custom entity resolution algorithms',
+        'Dedicated graph solutions architect',
+        'Custom RBAC & enterprise SSO',
+        'Strict 99.99% uptime SLA',
+        '24/7 incident response'
       ],
       cta: 'Talk to Enterprise'
     }
@@ -85,13 +85,13 @@ export const PricingSection: React.FC = () => {
       {/* Header */}
       <div className="text-center max-w-2xl mx-auto mb-12">
         <div className="text-[#e15c46] font-mono text-xs font-bold uppercase tracking-widest mb-2">
-          PRICING // PAY FOR THE HOURS YOU GET BACK
+          PLANS // DEPLOY HELIO ACROSS YOUR STACK
         </div>
         <h2 className="text-3xl md:text-5xl font-mono font-bold tracking-tight text-[#282828] uppercase leading-tight mb-4">
-          Transparent plans for every practice
+          Transparent plans for every engineering org
         </h2>
         <p className="text-sm font-mono text-[#5c5c56]">
-          Start free, then let Heron work inside your tools. Move up, down, or cancel whenever you like.
+          Stop wasting hours asking who owns what in Slack. Choose the right tier for your service count.
         </p>
 
         {/* Billing Toggle */}
@@ -135,7 +135,7 @@ export const PricingSection: React.FC = () => {
               {p.highlighted && (
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#e15c46] text-white font-mono text-[10px] font-bold px-3 py-1 uppercase tracking-wider shadow-lg flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
-                  <span>MOST POPULAR</span>
+                  <span>RECOMMENDED</span>
                 </div>
               )}
 
@@ -145,7 +145,7 @@ export const PricingSection: React.FC = () => {
                     {p.name}
                   </h3>
                   <span className={`font-mono text-[10px] px-2 py-0.5 cad-border ${p.highlighted ? 'border-white/30 text-white/80' : 'border-[#282828]/20 text-[#5c5c56]'}`}>
-                    CAD AGENT
+                    GRAPH TIER
                   </span>
                 </div>
 
@@ -193,7 +193,7 @@ export const PricingSection: React.FC = () => {
 
       {/* Credit Explanation Note */}
       <div className="mt-8 text-center font-mono text-[11px] text-[#5c5c56]">
-        10 credits = 1 Q&A, 1 project upload, 1 model scan/check, or 1 permit-ready compliance report export.
+        FalkorDB graph engine runs natively in Docker or via hosted managed cluster with sub-millisecond multi-hop latency.
       </div>
 
     </section>

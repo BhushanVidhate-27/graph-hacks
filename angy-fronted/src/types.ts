@@ -1,16 +1,20 @@
 export type ViewMode = 'website' | 'chat-widget' | 'dashboard' | 'viewport';
 
-export interface Violation {
+export interface DependencyNode {
   id: string;
-  code: string;
-  title: string;
-  description: string;
-  category: 'egress' | 'accessibility' | 'safety' | 'clearance';
-  x: number; // percentage on canvas
-  y: number; // percentage on canvas
-  status: 'flagged' | 'remediated' | 'ignored';
-  elementId: string;
-  recommendation: string;
+  name: string;
+  category: 'critical-path' | 'unowned' | 'provenance' | 'stale-edge';
+  tier: string;
+  owningTeam: string;
+  onCall: string;
+  blastRadius: string[];
+  hopDepth: number;
+  status: 'healthy' | 'stale' | 'orphan' | 'superseded';
+  cypherQuery: string;
+  summary: string;
+  groundTruthFact: string;
+  x: number; // percentage on visual canvas
+  y: number; // percentage on visual canvas
 }
 
 export interface PricingPlan {

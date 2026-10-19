@@ -1,36 +1,36 @@
 import React from 'react';
 import { CadCrosshair } from './CadCrosshair';
-import { Eye, MessageSquare, Zap, BookOpen } from 'lucide-react';
+import { Database, GitBranch, Clock, CheckCircle2 } from 'lucide-react';
 
 export const WorkflowSection: React.FC = () => {
   const steps = [
     {
       num: '01',
-      title: 'OBSERVE',
-      subtitle: 'Heron watches your model as you design',
-      desc: 'Seamlessly tracks rooms, wall assemblies, door clearances, and stairs in the background without slowing your workstation.',
-      icon: Eye
+      title: 'GRAPH INGESTION',
+      subtitle: 'Structured nodes & typed edges in FalkorDB',
+      desc: 'Persons, Teams, Projects, Services, Decisions, and Documents loaded with pre-indexed Cypher properties.',
+      icon: Database
     },
     {
       num: '02',
-      title: 'ADVISE',
-      subtitle: 'Flags issues and suggests fixes in plain language',
-      desc: 'Pinpoints non-compliant conditions and cites the exact IBC chapter or local municipal amendment in plain terms.',
-      icon: MessageSquare
+      title: 'MULTI-HOP CYPHER',
+      subtitle: 'Deterministic traversal instead of fuzzy search',
+      desc: 'Follows HAS_DEPENDENT and OWNED_BY paths to discover exact ripple effects and on-call escalation routes.',
+      icon: GitBranch
     },
     {
       num: '03',
-      title: 'ACT',
-      subtitle: 'With your approval, it makes the edit in the model',
-      desc: 'One-click transaction commits CAD changes directly to Revit or Rhino elements with full rollback capability.',
-      icon: Zap
+      title: 'TEMPORAL DECAY',
+      subtitle: 'Separates historical volume from recent activity',
+      desc: 'Checks edge validity dates so departed engineers are never recommended, even if they had the most commits.',
+      icon: Clock
     },
     {
       num: '04',
-      title: 'LEARN',
-      subtitle: "Picks up your firm's standards over time",
-      desc: 'Memorizes firm graphic naming conventions, custom families, line weights, and partition schedules.',
-      icon: BookOpen
+      title: 'GROUND-TRUTH HONESTY',
+      subtitle: 'Explicit negatives with zero hallucination',
+      desc: 'When an edge does not exist, Helio returns a confident negative. Scored against 20 hand-planted ground truth facts.',
+      icon: CheckCircle2
     }
   ];
 
@@ -39,14 +39,14 @@ export const WorkflowSection: React.FC = () => {
       
       <div className="mb-12 max-w-2xl">
         <div className="text-[#e15c46] font-mono text-xs font-bold uppercase tracking-widest mb-2">
-          WHY US // BUILT TO WORK THE WAY YOU DO
+          HOW IT WORKS // DETERMINISTIC GRAPH VERIFICATION
         </div>
         <h2 className="text-3xl md:text-5xl font-mono font-bold tracking-tight text-[#282828] uppercase leading-tight">
-          Fits into your process instead of replacing it.
+          Built on graph topology, verified against truth.
         </h2>
         <p className="mt-4 text-sm md:text-base font-mono text-[#5c5c56]">
-          Heron watches quietly, speaks up when something needs attention, and only acts when you say so,
-          so you stay in control the whole way through.
+          An LLM asked "is this answer correct?" is circular. Helio anchors the agent to a deterministic
+          graph database, scoring every answer against pre-planted ground-truth facts.
         </p>
       </div>
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  Globe, MessageSquareCode, LayoutDashboard, Monitor, 
+  Globe, Terminal, Database, Monitor, 
   Smartphone, Tablet, Sparkles, X, ChevronUp, Layers 
 } from 'lucide-react';
 import { ViewMode } from '../types';
@@ -37,7 +37,7 @@ export const WebsiteViewModule: React.FC<WebsiteViewModuleProps> = ({
           {/* Header indicator */}
           <div className="flex items-center gap-2 px-2 text-[#e15c46] font-bold border-r border-white/20 pr-3">
             <span className="w-2 h-2 rounded-full bg-[#e15c46] animate-pulse" />
-            <span className="text-[11px] hidden sm:inline">VIEWER MODULE:</span>
+            <span className="text-[11px] hidden sm:inline">HELIO CONTROL:</span>
           </div>
 
           {/* Mode Switchers */}
@@ -62,9 +62,9 @@ export const WebsiteViewModule: React.FC<WebsiteViewModuleProps> = ({
                   : 'bg-white/10 hover:bg-white/20 text-white/80'
               }`}
             >
-              <MessageSquareCode className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">In-Tool</span>
-              <span>Plugin</span>
+              <Terminal className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cypher</span>
+              <span>Agent</span>
             </button>
 
             <button
@@ -75,8 +75,8 @@ export const WebsiteViewModule: React.FC<WebsiteViewModuleProps> = ({
                   : 'bg-white/10 hover:bg-white/20 text-white/80'
               }`}
             >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Dashboard</span>
+              <Database className="w-3.5 h-3.5" />
+              <span>FalkorDB Console</span>
             </button>
 
             <button

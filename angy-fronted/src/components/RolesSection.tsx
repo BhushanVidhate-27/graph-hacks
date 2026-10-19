@@ -4,43 +4,43 @@ import { CadCrosshair } from './CadCrosshair';
 export const RolesSection: React.FC = () => {
   const roles = [
     {
-      title: 'ARCHITECTS',
-      desc: 'Hand the repetitive modelling to Heron and keep your focus on design.',
+      title: 'INCIDENT COMMANDERS',
+      desc: 'Trace blast radius and find the active on-call engineer in 3 seconds flat during outages.',
       num: '[01]'
     },
     {
-      title: 'INTERIOR DESIGNERS',
-      desc: 'Get quick help with layouts, fixtures, and clearances without leaving your model.',
+      title: 'STAFF ARCHITECTS',
+      desc: 'Follow SUPERSEDES chains to ensure deprecated architectural decisions are retired.',
       num: '[02]'
     },
     {
-      title: 'BIM MANAGERS',
-      desc: "Keep models clean and on-standard with an agent that knows your firm's rules.",
+      title: 'ENGINEERING DIRECTORS',
+      desc: 'Audit unowned services (like config-service) and eliminate structural blindspots.',
       num: '[03]'
     },
     {
-      title: 'ENGINEERS',
-      desc: 'Run discipline-specific checks and edits in the model, so coordination issues surface earlier.',
+      title: 'SITE RELIABILITY ENGINEERS',
+      desc: 'Map multi-hop cascade dependencies before releasing core infrastructure changes.',
       num: '[04]'
     },
     {
-      title: 'DRAFTERS',
-      desc: 'Skip tedious drawing cleanup and let Heron handle the repeatable parts.',
+      title: 'NEW HIRES & DEVELOPERS',
+      desc: 'Discover who actually maintains a codebase recently, bypassing stale Confluence wikis.',
       num: '[05]'
     },
     {
-      title: 'DESIGN LEADS',
-      desc: "Keep quality and standards consistent across everyone's work.",
+      title: 'PLATFORM LEADS',
+      desc: 'Keep service tiers and SLA contracts compliant across distributed engineering teams.',
       num: '[06]'
     },
     {
-      title: 'SMALL FIRMS',
-      desc: 'Get the output of a bigger team without adding headcount.',
+      title: 'SECURITY AUDITORS',
+      desc: 'Visualize exact blast radius when a critical dependency requires emergency patching.',
       num: '[07]'
     },
     {
-      title: 'LANDSCAPE ARCHITECTS',
-      desc: 'Sort grading, site elements, and layouts without manual grind.',
+      title: 'PRODUCT MANAGERS',
+      desc: 'Map cross-team service ownership to eliminate organizational blockers.',
       num: '[08]'
     }
   ];
@@ -50,10 +50,10 @@ export const RolesSection: React.FC = () => {
       
       <div className="mb-12 max-w-2xl">
         <div className="text-[#e15c46] font-mono text-xs font-bold uppercase tracking-widest mb-2">
-          USE CASES // MADE FOR THE PEOPLE IN THE MODEL
+          USE CASES // BUILT FOR COMPLEX ENGINEERING ORGS
         </div>
         <h2 className="text-3xl md:text-5xl font-mono font-bold tracking-tight text-[#282828] uppercase leading-tight">
-          Built for every role in the design office
+          One source of truth for the entire engineering organization
         </h2>
       </div>
 
@@ -70,7 +70,7 @@ export const RolesSection: React.FC = () => {
 
             <div>
               <div className="flex items-center justify-between font-mono text-[10px] text-[#5c5c56] group-hover:text-white/60 mb-3">
-                <span className="text-[#e15c46] font-bold">DISCIPLINE</span>
+                <span className="text-[#e15c46] font-bold">STAKEHOLDER</span>
                 <span>{r.num}</span>
               </div>
               <h3 className="font-mono font-bold text-base uppercase mb-2">

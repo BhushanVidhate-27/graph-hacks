@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { HeronLogo } from './HeronLogo';
+import { HelioLogo } from './HelioLogo';
 import { HeronButton } from './HeronButton';
-import { Menu, X, ChevronDown, Layers, LayoutDashboard, MessageSquareCode } from 'lucide-react';
+import { Menu, X, ChevronDown, Network, Database, Sparkles, Terminal } from 'lucide-react';
 import { CadCrosshair } from './CadCrosshair';
 import { ViewMode } from '../types';
 
@@ -22,7 +22,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
 
       <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 md:h-20 flex items-center justify-between">
         
-        {/* Left: Heron Logo */}
+        {/* Left: Helio Logo */}
         <div 
           className="cursor-pointer flex items-center"
           onClick={() => {
@@ -30,7 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >
-          <HeronLogo showText={true} />
+          <HelioLogo showText={true} />
         </div>
 
         {/* Center: Desktop Navigation Links */}
@@ -43,12 +43,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
             onMouseLeave={() => setProductDropdownOpen(false)}
           >
             <button className="flex items-center gap-1.5 hover:text-[#e15c46] transition-colors py-1">
-              <span>PRODUCT</span>
+              <span>EXPLORE</span>
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
 
             {productDropdownOpen && (
-              <div className="absolute top-full left-0 w-64 bg-[#f4f4ec] cad-border shadow-xl p-2 z-50 flex flex-col gap-1">
+              <div className="absolute top-full left-0 w-72 bg-[#f4f4ec] cad-border shadow-xl p-2 z-50 flex flex-col gap-1">
                 <button
                   onClick={() => {
                     onSelectMode('chat-widget');
@@ -56,10 +56,10 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
                   }}
                   className="w-full text-left p-3 hover:bg-[#282828] hover:text-white transition-colors group flex items-start gap-2.5"
                 >
-                  <MessageSquareCode className="w-4 h-4 text-[#e15c46] mt-0.5 flex-shrink-0" />
+                  <Terminal className="w-4 h-4 text-[#e15c46] mt-0.5 flex-shrink-0" />
                   <div>
-                    <div className="font-bold text-[12px]">HERON CHAT WIDGET</div>
-                    <div className="text-[10px] text-[#5c5c56] group-hover:text-white/70">In-tool agent for Revit & Rhino</div>
+                    <div className="font-bold text-[12px]">HELIO CYPHER AGENT</div>
+                    <div className="text-[10px] text-[#5c5c56] group-hover:text-white/70">Natural language graph traversal</div>
                   </div>
                 </button>
 
@@ -70,10 +70,10 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
                   }}
                   className="w-full text-left p-3 hover:bg-[#282828] hover:text-white transition-colors group flex items-start gap-2.5 cad-border-t"
                 >
-                  <LayoutDashboard className="w-4 h-4 text-[#e15c46] mt-0.5 flex-shrink-0" />
+                  <Database className="w-4 h-4 text-[#e15c46] mt-0.5 flex-shrink-0" />
                   <div>
-                    <div className="font-bold text-[12px]">HERON DASHBOARD</div>
-                    <div className="text-[10px] text-[#5c5c56] group-hover:text-white/70">BIM model compliance oversight</div>
+                    <div className="font-bold text-[12px]">FALKORDB GRAPH CONSOLE</div>
+                    <div className="text-[10px] text-[#5c5c56] group-hover:text-white/70">Topology, on-call & blast radius</div>
                   </div>
                 </button>
               </div>
@@ -84,14 +84,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
             onClick={() => onNavigateSection('inspector-section')} 
             className="hover:text-[#e15c46] transition-colors"
           >
-            INSPECTOR DEMO
+            BLAST RADIUS INSPECTOR
           </button>
 
           <button 
-            onClick={() => onNavigateSection('pricing-section')} 
+            onClick={() => onNavigateSection('problems-section')} 
             className="hover:text-[#e15c46] transition-colors"
           >
-            PRICING
+            THE 4 TRAPS
           </button>
 
           <button 
@@ -99,6 +99,13 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
             className="hover:text-[#e15c46] transition-colors"
           >
             HOW IT WORKS
+          </button>
+
+          <button 
+            onClick={() => onNavigateSection('pricing-section')} 
+            className="hover:text-[#e15c46] transition-colors"
+          >
+            PLANS
           </button>
 
           <button 
@@ -116,7 +123,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
             size="sm" 
             onClick={() => onSelectMode('chat-widget')}
           >
-            Launch Plugin
+            Query Agent
           </HeronButton>
 
           <HeronButton 
@@ -124,7 +131,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
             size="sm" 
             onClick={() => onSelectMode('dashboard')}
           >
-            Dashboard
+            Graph Console
           </HeronButton>
         </div>
 
@@ -151,7 +158,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
             }}
             className="text-left py-2 hover:text-[#e15c46]"
           >
-            INSPECTOR DEMO
+            BLAST RADIUS INSPECTOR
           </button>
           <button
             onClick={() => {
@@ -160,7 +167,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
             }}
             className="text-left py-2 text-[#e15c46] font-bold"
           >
-            HERON CHAT WIDGET (PLUGIN)
+            HELIO CYPHER AGENT
           </button>
           <button
             onClick={() => {
@@ -169,16 +176,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
             }}
             className="text-left py-2 text-[#e15c46] font-bold"
           >
-            HERON DASHBOARD (BIM WEB)
+            FALKORDB GRAPH CONSOLE
           </button>
           <button
             onClick={() => {
-              onNavigateSection('pricing-section');
+              onNavigateSection('problems-section');
               setMobileMenuOpen(false);
             }}
             className="text-left py-2 hover:text-[#e15c46]"
           >
-            PRICING
+            THE 4 TRAPS
           </button>
           <button
             onClick={() => {
@@ -191,7 +198,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentMode, onSelectMode, onNav
           </button>
           <div className="pt-2 flex flex-col gap-2">
             <HeronButton variant="brand" onClick={() => onSelectMode('dashboard')}>
-              ENTER DASHBOARD
+              ENTER GRAPH CONSOLE
             </HeronButton>
           </div>
         </div>
