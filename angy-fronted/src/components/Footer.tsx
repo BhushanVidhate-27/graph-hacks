@@ -1,7 +1,7 @@
 import React from 'react';
 import { HelioLogo } from './HelioLogo';
 import { CadCrosshair } from './CadCrosshair';
-import { ExternalLink, ArrowUpRight, GitBranch } from 'lucide-react';
+import { ExternalLink, ArrowUpRight, GitBranch, Mail } from 'lucide-react';
 import { ViewMode } from '../types';
 
 interface FooterProps {
@@ -25,11 +25,18 @@ export const Footer: React.FC<FooterProps> = ({ onSelectMode }) => {
               with complete Cypher provenance and zero hallucination.
             </p>
 
-            <div className="bg-[#ecece4] cad-border p-4 text-[11px] font-mono text-[#5c5c56] space-y-1">
-              <div className="text-[#282828] font-bold">PROJECT METRICS:</div>
-              <div>Synthetic Fintech Topology: 120 Persons · 5 Teams · 20 Services</div>
-              <div>Ground Truth Verification: 20 Hand-Crafted Planted Facts (100% Pass)</div>
-              <div className="text-[#e15c46] pt-1 font-bold">ENGINE: FalkorDB · Cypher · FastAPI</div>
+            <div className="bg-[#ecece4] cad-border p-4 text-[11px] font-mono text-[#5c5c56] space-y-2">
+              <div className="text-[#282828] font-bold">CONTACT & INQUIRIES:</div>
+              <a 
+                href="mailto:bhushanvidhate002@gmail.com" 
+                className="text-[#e15c46] font-bold text-xs hover:underline flex items-center gap-1.5"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                <span>bhushanvidhate002@gmail.com</span>
+              </a>
+              <div className="text-[10px] text-[#5c5c56] pt-1">
+                Track 03: Company Brain · Graph Hacks · Ground Truth Verified
+              </div>
             </div>
           </div>
 
@@ -111,11 +118,13 @@ export const Footer: React.FC<FooterProps> = ({ onSelectMode }) => {
             © 2026 HELIO — A COMPANY BRAIN. ALL RIGHTS RESERVED.
           </div>
           <div className="flex items-center gap-6">
+            <a href="mailto:bhushanvidhate002@gmail.com" className="hover:text-[#282828] transition-colors">
+              bhushanvidhate002@gmail.com
+            </a>
+            <span>•</span>
             <span>GROUND_TRUTH.MD</span>
             <span>•</span>
             <span>SCHEMA.MD</span>
-            <span>•</span>
-            <span>FALKORDB CYPHER</span>
           </div>
         </div>
 
